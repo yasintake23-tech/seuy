@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">İkimiz</string>
+    <string name="tagline">Sadece İkimizin Dünyası</string>
+    
+    <!-- Auth -->
+    <string name="create_account_title">Kendine Hesap Oluştur</string>
+    <string name="login_title">Giriş Yap</string>
+    <string name="full_name_label">İsminiz</string>
+    <string name="birth_date_label">Doğum Tarihiniz</string>
+    <string name="email_label">E-posta Adresi</string>
+    <string name="password_label">Şifre</string>
+    <string name="confirm_password_label">Şifre Tekrar</string>
+    <string name="select_avatar">Profil Fotoğrafı / Avatar Seç</string>
+    <string name="create_account_btn">Hesabımı Oluştur</string>
+    <string name="already_have_account">Zaten hesabın var mı? Giriş Yap</string>
+    <string name="no_account_yet">Hesabın yok mu? Kendine Hesap Oluştur</string>
+    
+    <!-- Pairing -->
+    <string name="your_pairing_code">Senin Eşleşme Kodun</string>
+    <string name="pairing_code_hint">Bu kodu sevgiline vererek eşleşebilirsiniz</string>
+    <string name="copy_code">Kodu Kopyala</string>
+    <string name="share_code">Sevgiline Gönder</string>
+    <string name="code_copied">Eşleşme kodu kopyalandı!</string>
+    <string name="enter_partner_code">Sevgilinle Eşleş</string>
+    <string name="enter_code_prompt">Sevgilinin Eşleşme Kodunu Gir</string>
+    <string name="pair_button">Eşleşmeyi Tamamla</string>
+    <string name="waiting_partner">Sevgilinin seni eşleştirmesi bekleniyor...</string>
+    
+    <!-- Paired Home -->
+    <string name="paired_success_title">Kalplerimiz Birleşti</string>
+    <string name="days_together">Birlikteyiz</string>
+    <string name="you">Sen</string>
+    <string name="partner">Sevgilin</string>
+    <string name="settings">Ayarlar</string>
+    <string name="unpair">Eşleşmeden Ayrıl</string>
+    <string name="unpair_confirm_title">Eşleşmeden ayrılmak istediğine emin misin?</string>
+    <string name="unpair_confirm_desc">Eşleşme kaldırılacak ancak hesabın ve profil bilgilerin silinmeyecek. Dilediğin zaman sevgilinle tekrar eşleşebilirsin.</string>
+    <string name="cancel">Vazgeç</string>
+    <string name="confirm_unpair">Ayrıl</string>
+    <string name="sign_out">Çıkış Yap</string>
+</resources>
+

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "746721522258",
+    "project_id": "ikimiz-7306c",
+    "storage_bucket": "ikimiz-7306c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:746721522258:android:6dc61b52ad7fd814da258b",
+        "android_client_info": {
+          "package_name": "com.aistudio.ikimiz.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_eDB_KLSG-Cto1Tjc9v16prYdS2bOSN4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

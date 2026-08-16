@@ -1,0 +1,101 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK Licenses & Install Components
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Prepare Debug Keystore
+        run: |
+          if [ -f "debug.keystore.base64" ]; then
+            echo "Decoding debug.keystore from repository base64..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f "debug.keystore" ]; then
+            echo "Creating standard debug.keystore fallback..."
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Build Debug APK with Gradle Wrapper
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Verify Generated APK
+        id: verify_apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+            echo "::error::Debug APK not found in app/build/outputs/apk/debug/"
+            exit 1
+          fi
+          APK_SIZE=$(ls -lh "$APK_PATH" | awk '{print $5}')
+          APK_NAME=$(basename "$APK_PATH")
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+          echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
+          echo "Found APK: $APK_PATH ($APK_SIZE)"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Generate Build Summary
+        if: always()
+        run: |
+          echo "### 📱 Android APK Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "- **Durum:** ✅ Başarılı" >> $GITHUB_STEP_SUMMARY
+            echo "- **Artifact Adı:** \`APK\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **APK Dosyası:** \`${{ steps.verify_apk.outputs.apk_name }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Boyut:** \`${{ steps.verify_apk.outputs.apk_size }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Konum:** \`app/build/outputs/apk/debug/\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Gradle Sürümü:** 9.3.1" >> $GITHUB_STEP_SUMMARY
+            echo "- **AGP Sürümü:** 9.1.1" >> $GITHUB_STEP_SUMMARY
+            echo "- **JDK Sürümü:** Eclipse Temurin 21" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Durum:** ❌ Başarısız" >> $GITHUB_STEP_SUMMARY
+            echo "Lütfen log çıktısındaki hata detaylarını kontrol edin." >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is operating on their own document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // User profile collection
+    match /users/{userId} {
+      // Allow user to get their own profile, partner profile, or when querying a specific partner by doc ID
+      allow get: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        resource.data.partnerId == request.auth.uid ||
+        resource.data.pairingCode != null
+      );
+      // Disallow collection-wide queries / list dumping
+      allow list: if false;
+      
+      // Allow user to create their own profile
+      allow create: if isOwner(userId);
+      // Allow user to update their own profile, or partner during mutual pairing/unpairing
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        request.resource.data.partnerId == request.auth.uid ||
+        resource.data.partnerId == request.auth.uid
+      );
+      allow delete: if isOwner(userId);
+    }
+    
+    // Pairing codes index collection: maps code -> { userId, createdAt }
+    match /pairing_codes/{code} {
+      // Authenticated users can look up a specific pairing code document to pair
+      allow get: if isAuthenticated();
+      // Disallow collection dumping of all codes
+      allow list: if false;
+      // Only owner can create or remove their pairing code
+      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data == null);
+    }
+  }
+}
