@@ -23,11 +23,28 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
+      - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
+
+      - name: Ensure Valid Gradle Wrapper Files
+        run: |
+          mkdir -p gradle/wrapper
+          # If gradle-wrapper.jar is missing, empty (0 bytes), or smaller than 10KB
+          JAR_SIZE=$(stat -c%s "gradle/wrapper/gradle-wrapper.jar" 2>/dev/null || stat -f%z "gradle/wrapper/gradle-wrapper.jar" 2>/dev/null || echo 0)
+          if [ "$JAR_SIZE" -lt 10000 ]; then
+            echo "Restoring official Gradle 9.3.1 wrapper JAR from base64 backup or official source..."
+            if [ -f "gradle/wrapper/gradle-wrapper.jar.base64" ]; then
+              base64 -d gradle/wrapper/gradle-wrapper.jar.base64 > gradle/wrapper/gradle-wrapper.jar
+            else
+              curl -sSL -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar
+            fi
+          fi
+          chmod +x gradlew || true
+          ls -la gradle/wrapper/
+          sha256sum gradle/wrapper/gradle-wrapper.jar
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -41,9 +58,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
-
-      - name: Grant Execute Permission to Gradle Wrapper
-        run: chmod +x gradlew
 
       - name: Prepare Debug Keystore
         run: |
@@ -94,7 +108,7 @@ jobs:
             echo "- **Konum:** \`app/build/outputs/apk/debug/\`" >> $GITHUB_STEP_SUMMARY
             echo "- **Gradle Sürümü:** 9.3.1" >> $GITHUB_STEP_SUMMARY
             echo "- **AGP Sürümü:** 9.1.1" >> $GITHUB_STEP_SUMMARY
-            echo "- **JDK Sürümü:** Eclipse Temurin 21" >> $GITHUB_STEP_SUMMARY
+            echo "- **JDK Sürümü:** Eclipse Temurin 17" >> $GITHUB_STEP_SUMMARY
           else
             echo "- **Durum:** ❌ Başarısız" >> $GITHUB_STEP_SUMMARY
             echo "Lütfen log çıktısındaki hata detaylarını kontrol edin." >> $GITHUB_STEP_SUMMARY
