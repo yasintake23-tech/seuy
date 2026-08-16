@@ -55,6 +55,7 @@ fun MainApp(
   val pairingSuccessMessage by viewModel.pairingSuccessMessage.collectAsState()
   val showSettingsDialog by viewModel.showSettingsDialog.collectAsState()
   val showUnpairConfirmDialog by viewModel.showUnpairConfirmDialog.collectAsState()
+  val diagnosticState by viewModel.diagnosticState.collectAsState()
 
   Crossfade(
     targetState = currentUser,
@@ -67,6 +68,7 @@ fun MainApp(
           isSignUp = isSignUpMode,
           isLoading = isAuthLoading,
           errorMessage = authError,
+          diagnosticState = diagnosticState,
           onSignUp = { email, pass, confirmPass, name, birthDate, avatarPreset, avatarBase64 ->
             viewModel.signUp(email, pass, confirmPass, name, birthDate, avatarPreset, avatarBase64)
           },

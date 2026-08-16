@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AuthRepository
 import com.example.data.GoogleAuthHelper
+import com.example.model.AuthDiagnosticState
 import com.example.model.GoogleSignInOutcome
 import com.example.model.PairingResult
 import com.example.model.UserProfile
@@ -18,6 +19,8 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AuthRepository(application.applicationContext)
+
+    val diagnosticState: StateFlow<AuthDiagnosticState> = repository.diagnosticState
 
     private val _currentUser = MutableStateFlow<UserProfile?>(null)
     val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
@@ -179,30 +182,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isAuthLoading.value = true
             _authError.value = null
 
-            val tokenResult = GoogleAuthHelper.getGoogleIdToken(context)
-            tokenResult.onSuccess { idToken ->
-                val authResult = repository.signInWithGoogleIdToken(idToken)
-                _isAuthLoading.value = false
+            val result = repository.signInWithGoogle(context)
+            _isAuthLoading.value = false
 
-                authResult.onSuccess { outcome ->
-                    when (outcome) {
-                        is GoogleSignInOutcome.Success -> {
-                            _currentUser.value = outcome.profile
-                            listenToUserUpdates(outcome.profile.userId)
-                            if (outcome.profile.isPaired && !outcome.profile.partnerId.isNullOrEmpty()) {
-                                listenToPartnerUpdates(outcome.profile.partnerId)
-                            }
-                        }
-                        is GoogleSignInOutcome.NeedsProfileCompletion -> {
-                            _profileCompletionData.value = outcome
+            result.onSuccess { outcome ->
+                when (outcome) {
+                    is GoogleSignInOutcome.Success -> {
+                        _currentUser.value = outcome.profile
+                        listenToUserUpdates(outcome.profile.userId)
+                        if (outcome.profile.isPaired && !outcome.profile.partnerId.isNullOrEmpty()) {
+                            listenToPartnerUpdates(outcome.profile.partnerId)
                         }
                     }
-                }.onFailure { error ->
-                    _authError.value = error.message ?: "Google ile giriş başarısız oldu."
+                    is GoogleSignInOutcome.NeedsProfileCompletion -> {
+                        _profileCompletionData.value = outcome
+                    }
                 }
             }.onFailure { error ->
-                _isAuthLoading.value = false
-                _authError.value = error.message ?: "Google hesabı seçilemedi."
+                _authError.value = error.message ?: "Google ile giriş başarısız oldu."
             }
         }
     }

@@ -1,48 +1,63 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if request is authenticated
+
+    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    // Helper function to check if user is operating on their own document
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    // User profile collection
+
+    // ==========================================
+    // 1. Users Profile Collection (/users/{userId})
+    // ==========================================
     match /users/{userId} {
-      // Allow user to get their own profile, partner profile, or when querying a specific partner by doc ID
+      // 1. Authenticated user can read their own profile (request.auth.uid == userId)
+      // 2. Paired partner can read profile (resource.data.partnerId == request.auth.uid)
+      // 3. Potential partner can read during pairing handshake (!resource.data.isPaired)
       allow get: if isAuthenticated() && (
         request.auth.uid == userId ||
-        resource.data.partnerId == request.auth.uid ||
-        resource.data.pairingCode != null
+        (resource != null && (resource.data.partnerId == request.auth.uid || resource.data.isPaired == false))
       );
-      // Disallow collection-wide queries / list dumping
+
+      // Strict privacy: Disallow collection-wide queries or bulk user listing
       allow list: if false;
-      
-      // Allow user to create their own profile
+
+      // Authenticated user can create their own initial profile document
       allow create: if isOwner(userId);
-      // Allow user to update their own profile, or partner during mutual pairing/unpairing
+
+      // Authenticated user can update their own profile;
+      // Partner can ONLY update mutual pairing status fields (isPaired, partnerId, partnerName, pairedAt)
       allow update: if isAuthenticated() && (
         request.auth.uid == userId ||
-        request.resource.data.partnerId == request.auth.uid ||
-        resource.data.partnerId == request.auth.uid
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPaired', 'partnerId', 'partnerName', 'pairedAt']) &&
+          (resource.data.partnerId == request.auth.uid || resource.data.partnerId == null || resource.data.isPaired == false)
+        )
       );
+
+      // Only owner can delete their own profile
       allow delete: if isOwner(userId);
     }
-    
-    // Pairing codes index collection: maps code -> { userId, createdAt }
+
+    // ====================================================
+    // 2. Pairing Codes Index Collection (/pairing_codes/{code})
+    // ====================================================
     match /pairing_codes/{code} {
-      // Authenticated users can look up a specific pairing code document to pair
+      // Authenticated users can query a single target pairing code document
       allow get: if isAuthenticated();
-      // Disallow collection dumping of all codes
+
+      // Strict privacy: Disallow listing all pairing codes
       allow list: if false;
-      // Only owner can create or remove their pairing code
+
+      // Only the user themselves can register or update their own pairing code
       allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data == null);
+
+      // Only the owner can remove or delete their pairing code
+      allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
   }
 }
