@@ -43,190 +43,46 @@ class CoupleDataRepository(private val context: Context) {
         instance ?: FirebaseDatabase.getInstance()
     }
 
+    private val chatRepo: ChatRepository by lazy { ChatRepository(context) }
+
     fun getCoupleDocId(uid1: String, uid2: String): String {
-        return if (uid1 < uid2) "${uid1}_${uid2}" else "${uid2}_${uid1}"
+        return chatRepo.getCoupleId(uid1, uid2)
     }
 
     // ==========================================
     // 1. LIVE REALTIME CHAT (Firestore + Realtime DB)
     // ==========================================
 
-    fun observeChatMessages(coupleId: String): Flow<List<ChatMessage>> = callbackFlow {
-        if (coupleId.isBlank()) {
-            trySend(emptyList())
-            awaitClose { }
-            return@callbackFlow
-        }
+    fun observeChatMessages(coupleId: String): Flow<List<ChatMessage>> {
+        return chatRepo.observeMessages(coupleId)
+    }
 
-        // Primary live listener via Firestore collection /couples/{coupleId}/messages
-        val firestoreListener = firestore.collection("couples")
-            .document(coupleId)
-            .collection("messages")
-            .orderBy("timestamp", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w(TAG, "Firestore Chat listener error: ${error.message}")
-                    return@addSnapshotListener
-                }
-                val messagesList = snapshot?.documents?.mapNotNull { doc ->
-                    doc.data?.let { data ->
-                        ChatMessage.fromMap(data).copy(
-                            id = (data["id"] as? String)?.takeIf { it.isNotBlank() } ?: doc.id
-                        )
-                    }
-                } ?: emptyList()
-                trySend(messagesList)
-            }
+    fun observePartnerTyping(coupleId: String, partnerId: String): Flow<Boolean> {
+        return chatRepo.observePartnerTyping(coupleId, partnerId)
+    }
 
-        // Secondary fallback listener via Realtime Database
-        val chatRef = try {
-            realtimeDb.reference.child("chats").child(coupleId).child("messages")
-        } catch (e: Exception) {
-            null
-        }
-
-        val rtdbListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                if (!snapshot.exists()) return
-                val messagesList = mutableListOf<ChatMessage>()
-                for (child in snapshot.children) {
-                    val map = child.value as? Map<*, *>
-                    if (map != null) {
-                        @Suppress("UNCHECKED_CAST")
-                        val strMap = map as Map<String, Any?>
-                        val msg = ChatMessage.fromMap(strMap).copy(
-                            id = (strMap["id"] as? String)?.takeIf { it.isNotBlank() } ?: (child.key ?: "")
-                        )
-                        messagesList.add(msg)
-                    }
-                }
-                if (messagesList.isNotEmpty()) {
-                    messagesList.sortBy { it.timestamp }
-                    trySend(messagesList)
-                }
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.w(TAG, "RTDB Chat listener error: ${error.message}")
-            }
-        }
-
-        chatRef?.addValueEventListener(rtdbListener)
-
-        awaitClose {
-            firestoreListener.remove()
-            chatRef?.removeEventListener(rtdbListener)
-        }
+    suspend fun setTypingStatus(coupleId: String, userId: String, isTyping: Boolean) {
+        chatRepo.setTypingStatus(coupleId, userId, isTyping)
     }
 
     suspend fun sendChatMessage(coupleId: String, message: ChatMessage) {
-        if (coupleId.isBlank()) return
-        try {
-            // Save to Firestore
-            firestore.collection("couples")
-                .document(coupleId)
-                .collection("messages")
-                .document(message.id)
-                .set(message.toMap(), SetOptions.merge())
-                .await()
+        chatRepo.sendMessage(coupleId, message)
+    }
 
-            // Also mirror to Realtime Database
-            realtimeDb.reference
-                .child("chats")
-                .child(coupleId)
-                .child("messages")
-                .child(message.id)
-                .setValue(message.toMap())
-                .await()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error pushing chat message", e)
-        }
+    suspend fun markMessagesAsRead(coupleId: String, currentUserId: String) {
+        chatRepo.markMessagesAsRead(coupleId, currentUserId)
     }
 
     suspend fun deleteChatMessage(coupleId: String, messageId: String) {
-        if (coupleId.isBlank() || messageId.isBlank()) return
-        try {
-            val updates: Map<String, Any?> = mapOf(
-                "isDeleted" to true,
-                "deleted" to true,
-                "text" to "",
-                "messageText" to "",
-                "imageUrl" to null,
-                "reactionEmoji" to null
-            )
-
-            // Update in Firestore
-            firestore.collection("couples")
-                .document(coupleId)
-                .collection("messages")
-                .document(messageId)
-                .set(updates, SetOptions.merge())
-                .await()
-
-            // Update in Realtime Database
-            realtimeDb.reference
-                .child("chats")
-                .child(coupleId)
-                .child("messages")
-                .child(messageId)
-                .updateChildren(updates)
-                .await()
-
-            Log.d(TAG, "Successfully marked chat message $messageId as deleted in Firestore and RTDB")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error marking chat message as deleted", e)
-        }
+        chatRepo.deleteMessage(coupleId, messageId)
     }
 
     suspend fun editChatMessage(coupleId: String, messageId: String, newText: String) {
-        if (coupleId.isBlank() || messageId.isBlank()) return
-        try {
-            val updates = mapOf(
-                "text" to newText,
-                "messageText" to newText,
-                "isEdited" to true
-            )
-            firestore.collection("couples")
-                .document(coupleId)
-                .collection("messages")
-                .document(messageId)
-                .set(updates, SetOptions.merge())
-                .await()
-
-            realtimeDb.reference
-                .child("chats")
-                .child(coupleId)
-                .child("messages")
-                .child(messageId)
-                .updateChildren(updates)
-                .await()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error editing chat message", e)
-        }
+        chatRepo.editMessage(coupleId, messageId, newText)
     }
 
     suspend fun reactToChatMessage(coupleId: String, messageId: String, emoji: String?) {
-        if (coupleId.isBlank() || messageId.isBlank()) return
-        try {
-            val updates = mapOf<String, Any?>("reactionEmoji" to emoji)
-            firestore.collection("couples")
-                .document(coupleId)
-                .collection("messages")
-                .document(messageId)
-                .set(updates, SetOptions.merge())
-                .await()
-
-            realtimeDb.reference
-                .child("chats")
-                .child(coupleId)
-                .child("messages")
-                .child(messageId)
-                .child("reactionEmoji")
-                .setValue(emoji)
-                .await()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting reaction emoji", e)
-        }
+        chatRepo.reactToMessage(coupleId, messageId, emoji)
     }
 
     // ==========================================

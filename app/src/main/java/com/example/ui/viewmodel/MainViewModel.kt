@@ -110,6 +110,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
 
+    private val _isPartnerTyping = MutableStateFlow(false)
+    val isPartnerTyping: StateFlow<Boolean> = _isPartnerTyping.asStateFlow()
+
     // Couple Gallery & Memories
     private val _coupleMemories = MutableStateFlow<List<CoupleMemory>>(emptyList())
     val coupleMemories: StateFlow<List<CoupleMemory>> = _coupleMemories.asStateFlow()
@@ -123,7 +126,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectTab(tab: BottomNavTab) {
+        if (_currentTab.value == BottomNavTab.CHAT && tab != BottomNavTab.CHAT) {
+            setTyping(false)
+        }
         _currentTab.value = tab
+        if (tab == BottomNavTab.CHAT) {
+            markChatAsRead()
+        }
     }
 
     private fun checkExistingSession() {
@@ -295,6 +304,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     _chatMessages.value = processed
                     _isDataLoading.value = false
+
+                    // If currently on Chat tab and there are incoming unread messages, mark them as read
+                    if (_currentTab.value == BottomNavTab.CHAT && processed.any { it.receiverId == uid1 && !it.isRead }) {
+                        coupleRepository.markMessagesAsRead(coupleId, uid1)
+                    }
+                }
+            }
+            // 1.1 Partner Typing Status (/chats/{coupleId}/typing/{partnerId})
+            launch {
+                coupleRepository.observePartnerTyping(coupleId, uid2).collectLatest { typing ->
+                    _isPartnerTyping.value = typing
                 }
             }
             // 2. Bucket List
@@ -580,6 +600,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Update in local state with image URL
             _chatMessages.value = _chatMessages.value.map { if (it.id == newMsgId) finalMsg else it }
             coupleRepository.sendChatMessage(coupleId, finalMsg)
+            setTyping(false)
+        }
+    }
+
+    fun setTyping(isTyping: Boolean) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+        viewModelScope.launch {
+            coupleRepository.setTypingStatus(coupleId, user.userId, isTyping)
+        }
+    }
+
+    fun markChatAsRead() {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+        viewModelScope.launch {
+            coupleRepository.markMessagesAsRead(coupleId, user.userId)
         }
     }
 

@@ -65,6 +65,7 @@ fun MainApp(
   val partnerStatus by viewModel.partnerStatus.collectAsState()
   val memoryPins by viewModel.memoryPins.collectAsState()
   val chatMessages by viewModel.chatMessages.collectAsState()
+  val isPartnerTyping by viewModel.isPartnerTyping.collectAsState()
   val coupleMemories by viewModel.coupleMemories.collectAsState()
   val doubleTapEmoji by viewModel.doubleTapEmoji.collectAsState()
 
@@ -165,6 +166,9 @@ fun MainApp(
                   partnerUser = partnerUser,
                   messages = chatMessages,
                   doubleTapEmoji = doubleTapEmoji,
+                  isPartnerTyping = isPartnerTyping,
+                  onTypingChanged = { viewModel.setTyping(it) },
+                  onMarkAsRead = { viewModel.markChatAsRead() },
                   onSetDoubleTapEmoji = { viewModel.setDoubleTapEmoji(it) },
                   onSendMessage = { text, imageUri, replyMsg -> viewModel.sendChatMessage(text, imageUri, replyMsg) },
                   onDeleteMessage = { id -> viewModel.deleteChatMessage(id) },

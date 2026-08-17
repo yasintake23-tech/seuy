@@ -10,7 +10,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -50,9 +54,11 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.TouchApp
@@ -120,6 +126,9 @@ fun ChatScreen(
     partnerUser: UserProfile?,
     messages: List<ChatMessage>,
     doubleTapEmoji: String = "🤍",
+    isPartnerTyping: Boolean = false,
+    onTypingChanged: (Boolean) -> Unit = {},
+    onMarkAsRead: () -> Unit = {},
     onSetDoubleTapEmoji: (String) -> Unit = {},
     onSendMessage: (String, Uri?, ChatMessage?) -> Unit,
     onDeleteMessage: (String) -> Unit = {},
@@ -128,7 +137,9 @@ fun ChatScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var inputText by remember { mutableStateOf("") }
+    var typingDebounceJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var editingMessage by remember { mutableStateOf<ChatMessage?>(null) }
@@ -154,10 +165,16 @@ fun ChatScreen(
 
     val doubleTapEmojiOptions = listOf("🤍", "❤️", "💖", "🥰", "✨", "🔥", "🌸", "🧸", "🐾")
 
-    // Auto scroll to bottom on new message
+    // Mark messages as read on entry
+    LaunchedEffect(Unit) {
+        onMarkAsRead()
+    }
+
+    // Auto scroll to bottom and mark read on new message
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
+            onMarkAsRead()
         }
     }
 
@@ -194,19 +211,37 @@ fun ChatScreen(
                         fontSize = 17.sp,
                         color = DeepCharcoal
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(SageGreen)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Özel Çift Alanı • Çift Tıklama: $doubleTapEmoji",
-                            fontSize = 11.sp,
-                            color = SlateNavy
-                        )
+                    if (isPartnerTyping) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(SoftCoralPrimary)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Yazıyor...",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SoftCoralPrimary
+                            )
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(SageGreen)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Özel Çift Alanı • Çift Tıklama: $doubleTapEmoji",
+                                fontSize = 11.sp,
+                                color = SlateNavy
+                            )
+                        }
                     }
                 }
                 Icon(
@@ -289,6 +324,28 @@ fun ChatScreen(
                         }
                     )
                 }
+            }
+        }
+
+        // Live Partner Typing Bubble at Bottom
+        AnimatedVisibility(
+            visible = isPartnerTyping,
+            enter = slideInVertically { it / 2 } + fadeIn(),
+            exit = slideOutVertically { it / 2 } + fadeOut()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AvatarImage(
+                    preset = partnerUser?.avatarPreset ?: "flower_pink",
+                    base64 = partnerUser?.avatarBase64,
+                    size = 26.dp
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                TypingDotsIndicator()
             }
         }
 
@@ -475,7 +532,18 @@ fun ChatScreen(
 
                 OutlinedTextField(
                     value = inputText,
-                    onValueChange = { inputText = it },
+                    onValueChange = {
+                        inputText = it
+                        val typing = it.isNotBlank()
+                        onTypingChanged(typing)
+                        typingDebounceJob?.cancel()
+                        if (typing) {
+                            typingDebounceJob = coroutineScope.launch {
+                                delay(2500)
+                                onTypingChanged(false)
+                            }
+                        }
+                    },
                     placeholder = {
                         Text(
                             text = if (editingMessage != null) "Düzenlenmiş mesajı yaz..." else "Sevgiline tatlı bir mesaj yaz...",
@@ -505,6 +573,8 @@ fun ChatScreen(
                 IconButton(
                     onClick = {
                         if (inputText.isNotBlank() || selectedImageUri != null) {
+                            typingDebounceJob?.cancel()
+                            onTypingChanged(false)
                             if (editingMessage != null) {
                                 onEditMessage(editingMessage!!.id, inputText.trim())
                                 editingMessage = null
@@ -1006,8 +1076,26 @@ fun SwipeableMessageItem(
                                 Text(
                                     text = timeString,
                                     fontSize = 10.sp,
-                                    color = if (isMe) Color.White.copy(alpha = 0.8f) else TextMuted
+                                    color = if (isMe) Color.White.copy(alpha = 0.85f) else TextMuted
                                 )
+                                if (isMe && !msg.isDeleted) {
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    if (msg.isRead) {
+                                        Icon(
+                                            imageVector = Icons.Default.DoneAll,
+                                            contentDescription = "Okundu",
+                                            tint = Color(0xFFBAE6FD),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "İletildi",
+                                            tint = Color.White.copy(alpha = 0.75f),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1040,5 +1128,76 @@ fun SwipeableMessageItem(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun TypingDotsIndicator(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "typing_dots_trans")
+    val dot1Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot1_alpha"
+    )
+    val dot2Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, delayMillis = 200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot2_alpha"
+    )
+    val dot3Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, delayMillis = 400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot3_alpha"
+    )
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(WarmCreamSurface)
+            .border(1.dp, BorderSoft, RoundedCornerShape(14.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = "Yazıyor",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = SoftCoralPrimary
+        )
+        Spacer(modifier = Modifier.width(2.dp))
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .alpha(dot1Alpha)
+                .clip(CircleShape)
+                .background(SoftCoralPrimary)
+        )
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .alpha(dot2Alpha)
+                .clip(CircleShape)
+                .background(SoftCoralPrimary)
+        )
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .alpha(dot3Alpha)
+                .clip(CircleShape)
+                .background(SoftCoralPrimary)
+        )
     }
 }
