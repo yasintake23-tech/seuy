@@ -2,32 +2,51 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Romantic Theme Palette
-val RosePrimary = Color(0xFFE5587A)
-val RoseDark = Color(0xFFC73659)
-val RoseLight = Color(0xFFFF8FA3)
-val RoseSoft = Color(0xFFFFF0F3)
-val RoseBackground = Color(0xFFFFF7F8)
-val RoseSurface = Color(0xFFFFFFFF)
+// Soft Romantic / Premium Minimal Palette
+val WarmCreamBackground = Color(0xFFFDFBF7)
+val WarmCreamSurface = Color(0xFFFFFFFF)
+val WarmCreamSurfaceVariant = Color(0xFFF7F2EC)
+val WarmCreamContainer = Color(0xFFF4EDE4)
 
-val CoralSecondary = Color(0xFFFF758F)
-val CoralLight = Color(0xFFFFB3C1)
-val CoralContainer = Color(0xFFFFE5EC)
+val SoftCoralPrimary = Color(0xFFE07A5F) // Pastel Mercan
+val SoftCoralDark = Color(0xFFC85A3D)
+val SoftCoralLight = Color(0xFFF4A28C)
+val SoftCoralContainer = Color(0xFFFDECE8)
 
-val WineTertiary = Color(0xFF800F2F)
-val WineLight = Color(0xFFA4133C)
-val GoldenAccent = Color(0xFFFFB703)
+val DeepCharcoal = Color(0xFF2B2D42) // Derin Füme
+val CharcoalPrimary = DeepCharcoal
+val SlateNavy = Color(0xFF3D405B)
+val TextMuted = Color(0xFF8D99AE)
 
-val TextPrimary = Color(0xFF2B1C22)
-val TextSecondary = Color(0xFF755B64)
-val TextMuted = Color(0xFFA38F97)
-val BorderLight = Color(0xFFFFCCD5)
+val SageGreen = Color(0xFF81B29A) // Soft Sage Accent
+val WarmGold = Color(0xFFF2CC8F) // Soft Gold Accent
+val BorderSoft = Color(0xFFEDE4D8) // İnce kenarlık rengi
+val BorderFocus = Color(0xFFE07A5F)
+
+// Legacy alias mappings for backward compatibility
+val RosePrimary = SoftCoralPrimary
+val RoseDark = SoftCoralDark
+val RoseLight = SoftCoralLight
+val RoseSoft = SoftCoralContainer
+val RoseBackground = WarmCreamBackground
+val RoseSurface = WarmCreamSurface
+
+val CoralSecondary = SoftCoralPrimary
+val CoralLight = SoftCoralLight
+val CoralContainer = SoftCoralContainer
+
+val WineTertiary = DeepCharcoal
+val WineLight = SlateNavy
+val GoldenAccent = WarmGold
+
+val TextPrimary = DeepCharcoal
+val TextSecondary = SlateNavy
+val BorderLight = BorderSoft
 
 // Dark Theme Variants
-val DarkBackground = Color(0xFF1A1215)
-val DarkSurface = Color(0xFF261B20)
-val DarkSurfaceVariant = Color(0xFF38272F)
-val DarkTextPrimary = Color(0xFFFFF0F3)
-val DarkTextSecondary = Color(0xFFE8C2CA)
-val DarkRosePrimary = Color(0xFFFF758F)
-
+val DarkBackground = Color(0xFF1E1E24)
+val DarkSurface = Color(0xFF282830)
+val DarkSurfaceVariant = Color(0xFF353540)
+val DarkTextPrimary = Color(0xFFFDFBF7)
+val DarkTextSecondary = Color(0xFFB8C0D0)
+val DarkRosePrimary = Color(0xFFE07A5F)

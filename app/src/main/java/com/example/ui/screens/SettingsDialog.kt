@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,11 +59,15 @@ import com.example.ui.theme.WineTertiary
 @Composable
 fun SettingsDialog(
     currentUser: UserProfile,
+    doubleTapEmoji: String = "🤍",
+    onSetDoubleTapEmoji: (String) -> Unit = {},
     onDismiss: () -> Unit,
     onOpenUnpairConfirm: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val doubleTapOptions = listOf("🤍", "❤️", "💖", "🥰", "✨", "🔥", "🌸", "🧸", "🐾")
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -139,6 +144,90 @@ fun SettingsDialog(
                                     fontSize = 11.sp,
                                     color = RoseDark
                                 )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Double Tap Reaction Emoji Preference
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = doubleTapEmoji,
+                                fontSize = 20.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Çift Dokunma Tepki Emojisi",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WineTertiary
+                                )
+                                Text(
+                                    text = "Mesaja iki kez tıklayınca gönderilecek emoji",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            doubleTapOptions.take(5).forEach { emoji ->
+                                val isSelected = emoji == doubleTapEmoji
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSelected) RosePrimary else MaterialTheme.colorScheme.surface)
+                                        .border(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) RoseDark else BorderLight,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { onSetDoubleTapEmoji(emoji) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = emoji, fontSize = 18.sp)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            doubleTapOptions.drop(5).forEach { emoji ->
+                                val isSelected = emoji == doubleTapEmoji
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSelected) RosePrimary else MaterialTheme.colorScheme.surface)
+                                        .border(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) RoseDark else BorderLight,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { onSetDoubleTapEmoji(emoji) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = emoji, fontSize = 18.sp)
+                                }
                             }
                         }
                     }

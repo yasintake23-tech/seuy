@@ -3,7 +3,6 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,16 +24,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -42,11 +36,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Tab
@@ -64,15 +56,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -81,281 +70,23 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
-import com.example.model.AuthDiagnosticState
-import com.example.model.AuthStageLog
-import com.example.model.StepStatus
 import com.example.ui.components.AvatarSelector
 import com.example.ui.components.RomanticDatePickerField
 import com.example.ui.theme.BorderLight
+import com.example.ui.theme.CharcoalPrimary
 import com.example.ui.theme.RoseDark
 import com.example.ui.theme.RosePrimary
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.WineTertiary
-
-@Composable
-fun GoogleLogoIcon(modifier: Modifier = Modifier.size(20.dp)) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val cx = w / 2f
-        val cy = h / 2f
-        val r = w * 0.44f
-
-        // Draw Google G colorful representation
-        drawCircle(
-            color = Color(0xFF4285F4),
-            radius = r,
-            center = Offset(cx, cy)
-        )
-        drawCircle(
-            color = Color.White,
-            radius = r * 0.6f,
-            center = Offset(cx, cy)
-        )
-        // Red slice
-        drawArc(
-            color = Color(0xFFEA4335),
-            startAngle = 200f,
-            sweepAngle = 100f,
-            useCenter = true,
-            size = size
-        )
-        // Yellow slice
-        drawArc(
-            color = Color(0xFFFBBC05),
-            startAngle = 120f,
-            sweepAngle = 80f,
-            useCenter = true,
-            size = size
-        )
-        // Green slice
-        drawArc(
-            color = Color(0xFF34A853),
-            startAngle = 30f,
-            sweepAngle = 90f,
-            useCenter = true,
-            size = size
-        )
-        // Blue slice & center bar
-        drawArc(
-            color = Color(0xFF4285F4),
-            startAngle = -30f,
-            sweepAngle = 60f,
-            useCenter = true,
-            size = size
-        )
-        drawCircle(
-            color = Color.White,
-            radius = r * 0.55f,
-            center = Offset(cx, cy)
-        )
-        // Crossbar
-        drawRect(
-            color = Color(0xFF4285F4),
-            topLeft = Offset(cx, cy - h * 0.1f),
-            size = androidx.compose.ui.geometry.Size(w * 0.45f, h * 0.2f)
-        )
-    }
-}
-
-@Composable
-fun AuthDiagnosticCard(
-    state: AuthDiagnosticState,
-    modifier: Modifier = Modifier
-) {
-    if (state.stages.isEmpty() && !state.isRunning) return
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2E)),
-        shape = RoundedCornerShape(16.dp),
-        modifier = modifier
-            .fillMaxWidth(0.92f)
-            .padding(bottom = 14.dp)
-            .border(
-                1.5.dp,
-                when (state.overallSuccess) {
-                    true -> Color(0xFF4CAF50)
-                    false -> Color(0xFFE53935)
-                    null -> Color(0xFFFFB74D)
-                },
-                RoundedCornerShape(16.dp)
-            )
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(14.dp)
-                .fillMaxWidth()
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.BugReport,
-                        contentDescription = "Debug",
-                        tint = Color(0xFFFFB74D),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "CANLI TEST TANILAMA (DEBUG)",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-
-                val badgeText = when {
-                    state.isRunning -> "TEST EDİLİYOR..."
-                    state.overallSuccess == true -> "BAŞARILI ✓"
-                    state.overallSuccess == false -> "HATA ✕"
-                    else -> "HAZIR"
-                }
-                val badgeColor = when {
-                    state.isRunning -> Color(0xFFFFA726)
-                    state.overallSuccess == true -> Color(0xFF66BB6A)
-                    state.overallSuccess == false -> Color(0xFFEF5350)
-                    else -> Color(0xFFBDBDBD)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .background(badgeColor.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                        .border(1.dp, badgeColor, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = badgeText,
-                        color = badgeColor,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-
-            if (state.operation.isNotBlank()) {
-                Text(
-                    text = "İşlem: ${state.operation}",
-                    color = Color(0xFFB0BEC5),
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                )
-            }
-
-            HorizontalDivider(
-                modifier = Modifier.padding(bottom = 8.dp),
-                color = Color(0xFF37474F),
-                thickness = 1.dp
-            )
-
-            // Stages list (1 to 6)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.stages.sortedBy { it.stageNumber }.forEach { stage ->
-                    val statusIcon = when (stage.status) {
-                        StepStatus.SUCCESS -> Icons.Default.CheckCircle
-                        StepStatus.FAIL -> Icons.Default.Cancel
-                        StepStatus.RUNNING -> Icons.Default.Refresh
-                        StepStatus.IDLE -> Icons.Default.Info
-                    }
-                    val statusColor = when (stage.status) {
-                        StepStatus.SUCCESS -> Color(0xFF81C784)
-                        StepStatus.FAIL -> Color(0xFFE57373)
-                        StepStatus.RUNNING -> Color(0xFFFFD54F)
-                        StepStatus.IDLE -> Color(0xFF90A4AE)
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF26293A), RoundedCornerShape(8.dp))
-                            .padding(8.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = statusIcon,
-                                contentDescription = null,
-                                tint = statusColor,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (stage.stageTitle.startsWith("STAGE")) stage.stageTitle else "STAGE ${stage.stageNumber}: ${stage.stageTitle}",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        if (stage.info.isNotBlank()) {
-                            Text(
-                                text = stage.info,
-                                color = if (stage.status == StepStatus.FAIL) Color(0xFFFF8A80) else Color(0xFFE0E0E0),
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.padding(start = 22.dp, top = 2.dp)
-                            )
-                        }
-
-                        // Detailed Exception breakdown if present
-                        if (stage.exceptionClass != null || stage.errorCode != null || stage.exceptionMessage != null) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(start = 22.dp, top = 6.dp)
-                                    .fillMaxWidth()
-                                    .background(Color(0xFF381E24), RoundedCornerShape(6.dp))
-                                    .border(1.dp, Color(0xFFB71C1C), RoundedCornerShape(6.dp))
-                                    .padding(8.dp)
-                            ) {
-                                if (!stage.exceptionClass.isNullOrBlank()) {
-                                    Text(
-                                        text = "EXCEPTION: ${stage.exceptionClass}",
-                                        color = Color(0xFFFFCDD2),
-                                        fontSize = 10.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                if (!stage.errorCode.isNullOrBlank()) {
-                                    Text(
-                                        text = "CODE: ${stage.errorCode}",
-                                        color = Color(0xFFFF8A80),
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                }
-                                if (!stage.exceptionMessage.isNullOrBlank()) {
-                                    Text(
-                                        text = "MESSAGE: ${stage.exceptionMessage}",
-                                        color = Color(0xFFFFEBEE),
-                                        fontSize = 10.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun AuthScreen(
     isSignUp: Boolean,
     isLoading: Boolean,
     errorMessage: String?,
-    diagnosticState: AuthDiagnosticState = AuthDiagnosticState(),
     onSignUp: (email: String, pass: String, confirmPass: String, name: String, birthDate: String, avatarPreset: String, avatarBase64: String?) -> Unit,
     onSignIn: (email: String, pass: String) -> Unit,
-    onGoogleSignIn: () -> Unit,
     onToggleMode: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -484,9 +215,6 @@ fun AuthScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Live Diagnostic Debug Information Box
-        AuthDiagnosticCard(state = diagnosticState)
-
         // Error message banner
         AnimatedVisibility(
             visible = !errorMessage.isNullOrEmpty(),
@@ -537,55 +265,6 @@ fun AuthScreen(
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Google Sign In Button
-                OutlinedButton(
-                    onClick = onGoogleSignIn,
-                    enabled = !isLoading,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = Color(0xFFFAFAFA),
-                        contentColor = Color(0xFF333333)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("google_sign_in_button")
-                ) {
-                    GoogleLogoIcon(modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = if (isSignUp) "Google ile Kayıt Ol" else "Google ile devam et",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF3C4043)
-                    )
-                }
-
-                // Divider with "veya"
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    HorizontalDivider(
-                        modifier = Modifier.weight(1f),
-                        color = BorderLight,
-                        thickness = 1.dp
-                    )
-                    Text(
-                        text = "veya e-posta ile",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 10.dp)
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.weight(1f),
-                        color = BorderLight,
-                        thickness = 1.dp
-                    )
-                }
-
                 if (isSignUp) {
                     // Profile Avatar Selector
                     AvatarSelector(
@@ -613,8 +292,17 @@ fun AuthScreen(
                             onNext = { focusManager.moveFocus(FocusDirection.Down) }
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = CharcoalPrimary,
+                            unfocusedTextColor = CharcoalPrimary,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            cursorColor = RosePrimary,
                             focusedBorderColor = RosePrimary,
-                            unfocusedBorderColor = BorderLight
+                            unfocusedBorderColor = BorderLight,
+                            focusedLabelColor = RosePrimary,
+                            unfocusedLabelColor = TextSecondary,
+                            focusedPlaceholderColor = TextMuted,
+                            unfocusedPlaceholderColor = TextMuted
                         ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
@@ -647,8 +335,17 @@ fun AuthScreen(
                         onNext = { focusManager.moveFocus(FocusDirection.Down) }
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = CharcoalPrimary,
+                        unfocusedTextColor = CharcoalPrimary,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        cursorColor = RosePrimary,
                         focusedBorderColor = RosePrimary,
-                        unfocusedBorderColor = BorderLight
+                        unfocusedBorderColor = BorderLight,
+                        focusedLabelColor = RosePrimary,
+                        unfocusedLabelColor = TextSecondary,
+                        focusedPlaceholderColor = TextMuted,
+                        unfocusedPlaceholderColor = TextMuted
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -687,8 +384,17 @@ fun AuthScreen(
                         }
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = CharcoalPrimary,
+                        unfocusedTextColor = CharcoalPrimary,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        cursorColor = RosePrimary,
                         focusedBorderColor = RosePrimary,
-                        unfocusedBorderColor = BorderLight
+                        unfocusedBorderColor = BorderLight,
+                        focusedLabelColor = RosePrimary,
+                        unfocusedLabelColor = TextSecondary,
+                        focusedPlaceholderColor = TextMuted,
+                        unfocusedPlaceholderColor = TextMuted
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -718,8 +424,17 @@ fun AuthScreen(
                             }
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = CharcoalPrimary,
+                            unfocusedTextColor = CharcoalPrimary,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            cursorColor = RosePrimary,
                             focusedBorderColor = RosePrimary,
-                            unfocusedBorderColor = BorderLight
+                            unfocusedBorderColor = BorderLight,
+                            focusedLabelColor = RosePrimary,
+                            unfocusedLabelColor = TextSecondary,
+                            focusedPlaceholderColor = TextMuted,
+                            unfocusedPlaceholderColor = TextMuted
                         ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
@@ -765,7 +480,7 @@ fun AuthScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isSignUp) "Hesabımı Oluştur" else "E-posta ile Giriş Yap",
+                            text = if (isSignUp) "Hesabımı Oluştur" else "Giriş Yap",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )

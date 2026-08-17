@@ -1,14 +1,21 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AuthRepository
-import com.example.data.GoogleAuthHelper
-import com.example.model.AuthDiagnosticState
-import com.example.model.GoogleSignInOutcome
+import com.example.data.CoupleDataRepository
+import com.example.data.R2StorageRepository
+import com.example.model.BottomNavTab
+import com.example.model.BucketItem
+import com.example.model.ChatMessage
+import com.example.model.CoupleMemory
+import com.example.model.DailyCoupleQuestion
+import com.example.model.MemoryPin
 import com.example.model.PairingResult
+import com.example.model.PartnerStatus
+import com.example.model.SecretLoveNote
 import com.example.model.UserProfile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,18 +23,31 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = AuthRepository(application.applicationContext)
+    private val authRepository = AuthRepository(application.applicationContext)
+    private val coupleRepository = CoupleDataRepository(application.applicationContext)
+    private val r2StorageRepository = R2StorageRepository(application.applicationContext)
+    private val prefs = application.getSharedPreferences("ikimiz_prefs", android.content.Context.MODE_PRIVATE)
 
-    val diagnosticState: StateFlow<AuthDiagnosticState> = repository.diagnosticState
+    // Double Tap Reaction Emoji Preference (Default: 🤍)
+    private val _doubleTapEmoji = MutableStateFlow(prefs.getString("double_tap_emoji", "🤍") ?: "🤍")
+    val doubleTapEmoji: StateFlow<String> = _doubleTapEmoji.asStateFlow()
 
+    fun setDoubleTapEmoji(emoji: String) {
+        _doubleTapEmoji.value = emoji
+        prefs.edit().putString("double_tap_emoji", emoji).apply()
+    }
+
+    // User & Partner State
     private val _currentUser = MutableStateFlow<UserProfile?>(null)
     val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
     private val _partnerUser = MutableStateFlow<UserProfile?>(null)
     val partnerUser: StateFlow<UserProfile?> = _partnerUser.asStateFlow()
 
+    // Auth State
     private val _isAuthLoading = MutableStateFlow(false)
     val isAuthLoading: StateFlow<Boolean> = _isAuthLoading.asStateFlow()
 
@@ -37,11 +57,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSignUpMode = MutableStateFlow(true)
     val isSignUpMode: StateFlow<Boolean> = _isSignUpMode.asStateFlow()
 
-    private val _profileCompletionData =
-        MutableStateFlow<GoogleSignInOutcome.NeedsProfileCompletion?>(null)
-    val profileCompletionData: StateFlow<GoogleSignInOutcome.NeedsProfileCompletion?> =
-        _profileCompletionData.asStateFlow()
-
+    // Pairing State
     private val _pairingCodeInput = MutableStateFlow("")
     val pairingCodeInput: StateFlow<String> = _pairingCodeInput.asStateFlow()
 
@@ -54,37 +70,79 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _pairingSuccessMessage = MutableStateFlow<String?>(null)
     val pairingSuccessMessage: StateFlow<String?> = _pairingSuccessMessage.asStateFlow()
 
+    // Dialogs State
     private val _showSettingsDialog = MutableStateFlow(false)
     val showSettingsDialog: StateFlow<Boolean> = _showSettingsDialog.asStateFlow()
 
     private val _showUnpairConfirmDialog = MutableStateFlow(false)
     val showUnpairConfirmDialog: StateFlow<Boolean> = _showUnpairConfirmDialog.asStateFlow()
 
+    // ----------------------------------------------------
+    // BOTTOM NAVIGATION & LIVE DATA STATE (NO MOCK DATA)
+    // ----------------------------------------------------
+    private val _currentTab = MutableStateFlow(BottomNavTab.HOME)
+    val currentTab: StateFlow<BottomNavTab> = _currentTab.asStateFlow()
+
+    private val _isDataLoading = MutableStateFlow(false)
+    val isDataLoading: StateFlow<Boolean> = _isDataLoading.asStateFlow()
+
+    // Games & Activities
+    private val _bucketList = MutableStateFlow<List<BucketItem>>(emptyList())
+    val bucketList: StateFlow<List<BucketItem>> = _bucketList.asStateFlow()
+
+    private val _secretNotes = MutableStateFlow<List<SecretLoveNote>>(emptyList())
+    val secretNotes: StateFlow<List<SecretLoveNote>> = _secretNotes.asStateFlow()
+
+    private val _dailyQuestions = MutableStateFlow<List<DailyCoupleQuestion>>(emptyList())
+    val dailyQuestions: StateFlow<List<DailyCoupleQuestion>> = _dailyQuestions.asStateFlow()
+
+    // Couple Map & Status
+    private val _myStatus = MutableStateFlow(PartnerStatus(statusType = "Evde", statusEmoji = "🏡", statusNote = "Bağlı"))
+    val myStatus: StateFlow<PartnerStatus> = _myStatus.asStateFlow()
+
+    private val _partnerStatus = MutableStateFlow(PartnerStatus(statusType = "Aktif", statusEmoji = "✨", statusNote = "Çevrimiçi"))
+    val partnerStatus: StateFlow<PartnerStatus> = _partnerStatus.asStateFlow()
+
+    private val _memoryPins = MutableStateFlow<List<MemoryPin>>(emptyList())
+    val memoryPins: StateFlow<List<MemoryPin>> = _memoryPins.asStateFlow()
+
+    // DM / Realtime Database Chat
+    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
+
+    // Couple Gallery & Memories
+    private val _coupleMemories = MutableStateFlow<List<CoupleMemory>>(emptyList())
+    val coupleMemories: StateFlow<List<CoupleMemory>> = _coupleMemories.asStateFlow()
+
     private var currentUserJob: Job? = null
     private var partnerJob: Job? = null
+    private var liveDataJob: Job? = null
 
     init {
         checkExistingSession()
     }
 
+    fun selectTab(tab: BottomNavTab) {
+        _currentTab.value = tab
+    }
+
     private fun checkExistingSession() {
-        val authUser = repository.getCurrentFirebaseUser()
+        val authUser = authRepository.getCurrentFirebaseUser()
         if (authUser == null) {
-            // Unauthenticated state: do not attach any Firestore snapshot listeners
             _currentUser.value = null
             _partnerUser.value = null
             return
         }
 
-        val local = repository.getLocalProfile()
+        val local = authRepository.getLocalProfile()
         if (local != null && local.userId == authUser.uid) {
             _currentUser.value = local
             listenToUserUpdates(authUser.uid)
             if (local.isPaired && !local.partnerId.isNullOrEmpty()) {
                 listenToPartnerUpdates(local.partnerId)
+                startObservingLiveData(local.userId, local.partnerId)
             }
         } else {
-            // User authenticated in Firebase Auth; listen directly to Firestore
             listenToUserUpdates(authUser.uid)
         }
     }
@@ -133,7 +191,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isAuthLoading.value = true
             _authError.value = null
 
-            val result = repository.signUp(
+            val result = authRepository.signUp(
                 email = email,
                 pass = password,
                 name = name,
@@ -162,7 +220,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isAuthLoading.value = true
             _authError.value = null
 
-            val result = repository.signIn(email, pass)
+            val result = authRepository.signIn(email, pass)
             _isAuthLoading.value = false
 
             result.onSuccess { profile ->
@@ -170,6 +228,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 listenToUserUpdates(profile.userId)
                 if (profile.isPaired && !profile.partnerId.isNullOrEmpty()) {
                     listenToPartnerUpdates(profile.partnerId)
+                    startObservingLiveData(profile.userId, profile.partnerId)
                 }
             }.onFailure { error ->
                 _authError.value = error.message ?: "Giriş yapılamadı."
@@ -177,82 +236,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun signInWithGoogle(context: Context) {
-        viewModelScope.launch {
-            _isAuthLoading.value = true
-            _authError.value = null
-
-            val result = repository.signInWithGoogle(context)
-            _isAuthLoading.value = false
-
-            result.onSuccess { outcome ->
-                when (outcome) {
-                    is GoogleSignInOutcome.Success -> {
-                        _currentUser.value = outcome.profile
-                        listenToUserUpdates(outcome.profile.userId)
-                        if (outcome.profile.isPaired && !outcome.profile.partnerId.isNullOrEmpty()) {
-                            listenToPartnerUpdates(outcome.profile.partnerId)
-                        }
-                    }
-                    is GoogleSignInOutcome.NeedsProfileCompletion -> {
-                        _profileCompletionData.value = outcome
-                    }
-                }
-            }.onFailure { error ->
-                _authError.value = error.message ?: "Google ile giriş başarısız oldu."
-            }
-        }
-    }
-
-    fun completeGoogleProfile(
-        name: String,
-        birthDate: String,
-        avatarPreset: String,
-        avatarBase64: String?
-    ) {
-        val completion = _profileCompletionData.value ?: return
-
-        viewModelScope.launch {
-            _isAuthLoading.value = true
-            _authError.value = null
-
-            val result = repository.completeGoogleProfile(
-                uid = completion.uid,
-                name = name,
-                birthDate = birthDate,
-                email = completion.email,
-                avatarPreset = avatarPreset,
-                avatarBase64 = avatarBase64
-            )
-
-            _isAuthLoading.value = false
-            result.onSuccess { profile ->
-                _profileCompletionData.value = null
-                _currentUser.value = profile
-                listenToUserUpdates(profile.userId)
-            }.onFailure { error ->
-                _authError.value = error.message ?: "Profil kaydedilemedi."
-            }
-        }
-    }
-
-    fun dismissProfileCompletion() {
-        _profileCompletionData.value = null
-        signOut()
-    }
-
     private fun listenToUserUpdates(userId: String) {
         currentUserJob?.cancel()
         currentUserJob = viewModelScope.launch {
-            repository.observeCurrentUser(userId).collectLatest { updated ->
+            authRepository.observeCurrentUser(userId).collectLatest { updated ->
                 if (updated != null) {
                     val wasPaired = _currentUser.value?.isPaired == true
                     _currentUser.value = updated
 
                     if (updated.isPaired && !updated.partnerId.isNullOrEmpty()) {
                         listenToPartnerUpdates(updated.partnerId)
+                        startObservingLiveData(updated.userId, updated.partnerId)
                     } else if (wasPaired && !updated.isPaired) {
                         partnerJob?.cancel()
+                        liveDataJob?.cancel()
                         _partnerUser.value = null
                     }
                 }
@@ -263,8 +260,80 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun listenToPartnerUpdates(partnerId: String) {
         partnerJob?.cancel()
         partnerJob = viewModelScope.launch {
-            repository.observePartner(partnerId).collectLatest { partner ->
+            authRepository.observePartner(partnerId).collectLatest { partner ->
                 _partnerUser.value = partner
+            }
+        }
+    }
+
+    private fun getDeletedMessageIds(): Set<String> {
+        return prefs.getStringSet("deleted_msg_ids_set", emptySet()) ?: emptySet()
+    }
+
+    private fun markMessageIdAsDeletedLocally(id: String) {
+        val current = getDeletedMessageIds().toMutableSet()
+        current.add(id)
+        prefs.edit().putStringSet("deleted_msg_ids_set", current).apply()
+    }
+
+    private fun startObservingLiveData(uid1: String, uid2: String) {
+        liveDataJob?.cancel()
+        val coupleId = coupleRepository.getCoupleDocId(uid1, uid2)
+        _isDataLoading.value = true
+
+        liveDataJob = viewModelScope.launch {
+            // 1. Live Chat Messages (Firestore + Realtime DB)
+            launch {
+                coupleRepository.observeChatMessages(coupleId).collectLatest { msgs ->
+                    val locallyDeleted = getDeletedMessageIds()
+                    val processed = msgs.map { m ->
+                        if (m.isDeleted || locallyDeleted.contains(m.id)) {
+                            m.copy(isDeleted = true, text = "", imageUrl = null, reactionEmoji = null)
+                        } else {
+                            m
+                        }
+                    }
+                    _chatMessages.value = processed
+                    _isDataLoading.value = false
+                }
+            }
+            // 2. Bucket List
+            launch {
+                coupleRepository.observeBucketList(coupleId).collectLatest { items ->
+                    _bucketList.value = items
+                }
+            }
+            // 3. Secret Notes
+            launch {
+                coupleRepository.observeSecretNotes(coupleId).collectLatest { notes ->
+                    _secretNotes.value = notes
+                }
+            }
+            // 4. Memory Pins & Map
+            launch {
+                coupleRepository.observeMemoryPins(coupleId).collectLatest { pins ->
+                    _memoryPins.value = pins
+                }
+            }
+            // 5. Couple Memories & Photos
+            launch {
+                coupleRepository.observeCoupleMemories(coupleId).collectLatest { memories ->
+                    _coupleMemories.value = memories
+                }
+            }
+            // 6. Daily Questions
+            launch {
+                coupleRepository.observeDailyQuestions(coupleId).collectLatest { questions ->
+                    _dailyQuestions.value = questions
+                }
+            }
+            // 7. Partner Status
+            launch {
+                coupleRepository.observePartnerStatus(coupleId, uid2).collectLatest { status ->
+                    if (status != null) {
+                        _partnerStatus.value = status
+                    }
+                }
             }
         }
     }
@@ -288,18 +357,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _pairingError.value = null
             _pairingSuccessMessage.value = null
 
-            val result = repository.pairWithCode(user.userId, targetCode)
+            val result = authRepository.pairWithCode(user.userId, targetCode)
             _isPairingInProgress.value = false
 
             when (result) {
                 is PairingResult.Success -> {
                     _pairingSuccessMessage.value = "${result.partnerName} ile başarıyla eşleştiniz! 💖"
                     _pairingCodeInput.value = ""
-                    val updated = repository.getLocalProfile()
+                    val updated = authRepository.getLocalProfile()
                     if (updated != null) {
                         _currentUser.value = updated
                         if (updated.partnerId != null) {
                             listenToPartnerUpdates(updated.partnerId)
+                            startObservingLiveData(updated.userId, updated.partnerId)
                         }
                     }
                 }
@@ -318,20 +388,320 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _showUnpairConfirmDialog.value = false
             _showSettingsDialog.value = false
 
-            val result = repository.unpair(user)
+            val result = authRepository.unpair(user)
             _isPairingInProgress.value = false
 
             result.onSuccess {
                 partnerJob?.cancel()
+                liveDataJob?.cancel()
                 _partnerUser.value = null
-                val updated = repository.getLocalProfile()
+                val updated = authRepository.getLocalProfile()
                 _currentUser.value = updated
+                _currentTab.value = BottomNavTab.HOME
             }.onFailure { error ->
                 _pairingError.value = error.message
             }
         }
     }
 
+    // ----------------------------------------------------
+    // TAB ACTIONS (LIVE DATABASE WRITES)
+    // ----------------------------------------------------
+
+    fun toggleBucketItem(id: String) {
+        val item = _bucketList.value.find { it.id == id } ?: return
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        val newStatus = !item.isCompleted
+        val updated = item.copy(
+            isCompleted = newStatus,
+            completedAt = if (newStatus) System.currentTimeMillis() else null
+        )
+
+        viewModelScope.launch {
+            coupleRepository.saveBucketItem(coupleId, updated)
+        }
+    }
+
+    fun addBucketItem(title: String, category: String) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        val newItem = BucketItem(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            category = category,
+            isCompleted = false,
+            addedByName = user.displayName,
+            createdAt = System.currentTimeMillis()
+        )
+
+        viewModelScope.launch {
+            coupleRepository.saveBucketItem(coupleId, newItem)
+        }
+    }
+
+    fun unlockSecretNote(id: String) {
+        val note = _secretNotes.value.find { it.id == id } ?: return
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        val updated = note.copy(isUnlocked = true)
+        viewModelScope.launch {
+            coupleRepository.saveSecretNote(coupleId, updated)
+        }
+    }
+
+    fun addSecretNote(title: String, content: String, unlockCondition: String) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        val newNote = SecretLoveNote(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            content = content,
+            unlockCondition = unlockCondition,
+            isUnlocked = false,
+            authorName = user.displayName,
+            iconEmoji = "💌",
+            createdAt = System.currentTimeMillis()
+        )
+
+        viewModelScope.launch {
+            coupleRepository.saveSecretNote(coupleId, newNote)
+        }
+    }
+
+    fun answerDailyQuestion(questionId: String, answer: String) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        val existing = _dailyQuestions.value.find { it.id == questionId }
+        val updated = existing?.copy(myAnswer = answer) ?: DailyCoupleQuestion(
+            id = questionId,
+            question = "Günün Sorusu ✨",
+            myAnswer = answer,
+            date = "Bugün"
+        )
+
+        viewModelScope.launch {
+            coupleRepository.saveDailyQuestionAnswer(coupleId, updated)
+        }
+    }
+
+    fun updateMyStatus(type: String, emoji: String, note: String) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        val newStatus = PartnerStatus(
+            userId = user.userId,
+            statusType = type,
+            statusEmoji = emoji,
+            statusNote = note,
+            updatedAt = System.currentTimeMillis()
+        )
+        _myStatus.value = newStatus
+
+        viewModelScope.launch {
+            coupleRepository.updateMyStatus(coupleId, user.userId, newStatus)
+        }
+    }
+
+    fun addMemoryPin(title: String, locationName: String, category: String, date: String, note: String) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        val randomX = (0.2f + Math.random().toFloat() * 0.6f)
+        val randomY = (0.2f + Math.random().toFloat() * 0.6f)
+        val emoji = when (category) {
+            "Kafe", "Kafe ☕" -> "☕"
+            "Doğa", "Doğa 🌊" -> "🌊"
+            "Restoran", "Restoran 🍕" -> "🍕"
+            else -> "✨"
+        }
+        val newPin = MemoryPin(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            locationName = locationName,
+            category = category,
+            date = date,
+            note = note,
+            iconEmoji = emoji,
+            posX = randomX,
+            posY = randomY,
+            addedByName = user.displayName,
+            createdAt = System.currentTimeMillis()
+        )
+
+        viewModelScope.launch {
+            coupleRepository.saveMemoryPin(coupleId, newPin)
+        }
+    }
+
+    fun sendChatMessage(text: String, imageUri: Uri? = null, replyToMessage: ChatMessage? = null) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: "partner"
+        val coupleId = if (user.partnerId != null) coupleRepository.getCoupleDocId(user.userId, user.partnerId!!) else "couple_${user.userId}"
+
+        val newMsgId = UUID.randomUUID().toString()
+        val tempMsg = ChatMessage(
+            id = newMsgId,
+            senderId = user.userId,
+            receiverId = partnerId,
+            senderName = user.displayName,
+            text = text,
+            imageUrl = null,
+            timestamp = System.currentTimeMillis(),
+            isRead = false,
+            replyToText = if (replyToMessage?.isDeleted == true) "🚫 Bu mesaj silindi" else replyToMessage?.text?.take(80),
+            replyToSenderName = replyToMessage?.senderName,
+            replyToId = replyToMessage?.id
+        )
+
+        // Optimistic append
+        _chatMessages.value = _chatMessages.value + tempMsg
+
+        viewModelScope.launch {
+            var imageUrl: String? = null
+            if (imageUri != null) {
+                val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "chat_photos")
+                imageUrl = uploadRes.getOrNull()
+            }
+
+            val finalMsg = tempMsg.copy(imageUrl = imageUrl)
+            // Update in local state with image URL
+            _chatMessages.value = _chatMessages.value.map { if (it.id == newMsgId) finalMsg else it }
+            coupleRepository.sendChatMessage(coupleId, finalMsg)
+        }
+    }
+
+    fun deleteChatMessage(messageId: String) {
+        markMessageIdAsDeletedLocally(messageId)
+
+        // Optimistic update immediately in local state
+        _chatMessages.value = _chatMessages.value.map { msg ->
+            if (msg.id == messageId) {
+                msg.copy(
+                    isDeleted = true,
+                    text = "",
+                    imageUrl = null,
+                    reactionEmoji = null
+                )
+            } else {
+                msg
+            }
+        }
+
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId
+        val coupleId = if (partnerId != null) coupleRepository.getCoupleDocId(user.userId, partnerId) else "couple_${user.userId}"
+
+        viewModelScope.launch {
+            coupleRepository.deleteChatMessage(coupleId, messageId)
+        }
+    }
+
+    fun editChatMessage(messageId: String, newText: String) {
+        _chatMessages.value = _chatMessages.value.map { msg ->
+            if (msg.id == messageId) {
+                msg.copy(text = newText, isEdited = true)
+            } else {
+                msg
+            }
+        }
+
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        viewModelScope.launch {
+            coupleRepository.editChatMessage(coupleId, messageId, newText)
+        }
+    }
+
+    fun reactToChatMessage(messageId: String, emoji: String?) {
+        _chatMessages.value = _chatMessages.value.map { msg ->
+            if (msg.id == messageId) {
+                msg.copy(reactionEmoji = emoji)
+            } else {
+                msg
+            }
+        }
+
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        viewModelScope.launch {
+            coupleRepository.reactToChatMessage(coupleId, messageId, emoji)
+        }
+    }
+
+    fun addCoupleMemory(
+        title: String,
+        caption: String,
+        location: String,
+        date: String,
+        preset: String,
+        imageBase64: String?,
+        imageUri: Uri? = null
+    ) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        viewModelScope.launch {
+            var publicUrl: String? = null
+            if (imageUri != null) {
+                val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "memories")
+                publicUrl = uploadRes.getOrNull()
+            }
+
+            val newMemory = CoupleMemory(
+                id = UUID.randomUUID().toString(),
+                title = title,
+                caption = caption,
+                location = location,
+                date = date,
+                imagePreset = preset,
+                imageBase64 = imageBase64,
+                imageUrl = publicUrl,
+                likesCount = 1,
+                isLikedByMe = true,
+                authorName = user.displayName,
+                createdAt = System.currentTimeMillis()
+            )
+
+            coupleRepository.saveCoupleMemory(coupleId, newMemory)
+        }
+    }
+
+    fun toggleLikeMemory(memoryId: String) {
+        val memory = _coupleMemories.value.find { it.id == memoryId } ?: return
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+
+        val newLiked = !memory.isLikedByMe
+        val updated = memory.copy(
+            isLikedByMe = newLiked,
+            likesCount = if (newLiked) memory.likesCount + 1 else (memory.likesCount - 1).coerceAtLeast(0)
+        )
+
+        viewModelScope.launch {
+            coupleRepository.saveCoupleMemory(coupleId, updated)
+        }
+    }
+
+    // Dialog Controls
     fun openSettings() {
         _showSettingsDialog.value = true
     }
@@ -360,11 +730,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun signOut() {
         currentUserJob?.cancel()
         partnerJob?.cancel()
-        repository.signOut()
+        liveDataJob?.cancel()
+        authRepository.signOut()
         _currentUser.value = null
         _partnerUser.value = null
-        _profileCompletionData.value = null
         _showSettingsDialog.value = false
         _showUnpairConfirmDialog.value = false
+        _currentTab.value = BottomNavTab.HOME
     }
 }

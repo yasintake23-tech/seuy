@@ -74,6 +74,7 @@ import com.example.model.UserProfile
 import com.example.ui.components.AvatarImage
 import com.example.ui.components.RomanticPulsatingHeart
 import com.example.ui.theme.BorderLight
+import com.example.ui.theme.CharcoalPrimary
 import com.example.ui.theme.CoralContainer
 import com.example.ui.theme.RoseDark
 import com.example.ui.theme.RoseLight
@@ -466,10 +467,13 @@ fun PairingScreen(
                             }
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = CharcoalPrimary,
+                            unfocusedTextColor = CharcoalPrimary,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            cursorColor = RosePrimary,
                             focusedBorderColor = RosePrimary,
-                            unfocusedBorderColor = BorderLight,
-                            focusedContainerColor = RoseSoft.copy(alpha = 0.4f),
-                            unfocusedContainerColor = RoseSoft.copy(alpha = 0.2f)
+                            unfocusedBorderColor = BorderLight
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier

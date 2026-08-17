@@ -12,43 +12,43 @@ import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
   primary = DarkRosePrimary,
-  secondary = CoralLight,
-  tertiary = WineLight,
+  secondary = WarmGold,
+  tertiary = SageGreen,
   background = DarkBackground,
   surface = DarkSurface,
   surfaceVariant = DarkSurfaceVariant,
-  onPrimary = DarkTextPrimary,
+  onPrimary = WarmCreamSurface,
   onSecondary = DarkBackground,
   onTertiary = DarkTextPrimary,
   onBackground = DarkTextPrimary,
   onSurface = DarkTextPrimary,
   onSurfaceVariant = DarkTextSecondary,
-  outline = BorderLight
+  outline = BorderSoft
 )
 
 private val LightColorScheme = lightColorScheme(
-  primary = RosePrimary,
-  onPrimary = RoseSurface,
-  primaryContainer = RoseSoft,
-  onPrimaryContainer = RoseDark,
-  secondary = CoralSecondary,
-  onSecondary = RoseSurface,
-  secondaryContainer = CoralContainer,
-  onSecondaryContainer = WineTertiary,
-  tertiary = WineTertiary,
-  background = RoseBackground,
-  surface = RoseSurface,
-  surfaceVariant = RoseSoft,
-  onBackground = TextPrimary,
-  onSurface = TextPrimary,
-  onSurfaceVariant = TextSecondary,
-  outline = BorderLight
+  primary = SoftCoralPrimary,
+  onPrimary = WarmCreamSurface,
+  primaryContainer = SoftCoralContainer,
+  onPrimaryContainer = SoftCoralDark,
+  secondary = SageGreen,
+  onSecondary = WarmCreamSurface,
+  secondaryContainer = WarmCreamContainer,
+  onSecondaryContainer = DeepCharcoal,
+  tertiary = SlateNavy,
+  background = WarmCreamBackground,
+  surface = WarmCreamSurface,
+  surfaceVariant = WarmCreamSurfaceVariant,
+  onBackground = DeepCharcoal,
+  onSurface = DeepCharcoal,
+  onSurfaceVariant = SlateNavy,
+  outline = BorderSoft
 )
 
 @Composable
 fun MyApplicationTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = false, // Keep intentional romantic aesthetic
+  dynamicColor: Boolean = false, // Keep intentional soft romantic palette
   content: @Composable () -> Unit,
 ) {
   val colorScheme = when {
@@ -66,4 +66,3 @@ fun MyApplicationTheme(
     content = content
   )
 }
-

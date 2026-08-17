@@ -58,13 +58,3 @@ sealed interface PairingResult {
     data class Success(val partnerName: String) : PairingResult
     data class Error(val message: String) : PairingResult
 }
-
-sealed interface GoogleSignInOutcome {
-    data class Success(val profile: UserProfile) : GoogleSignInOutcome
-    data class NeedsProfileCompletion(
-        val uid: String,
-        val email: String,
-        val displayName: String,
-        val photoUrl: String?
-    ) : GoogleSignInOutcome
-}
