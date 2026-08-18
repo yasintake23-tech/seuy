@@ -1,17 +1,24 @@
 package com.example
 
+import android.Manifest
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.model.BottomNavTab
 import com.example.ui.components.CoupleBottomNavigationBar
@@ -26,6 +33,7 @@ import com.example.ui.screens.SettingsDialog
 import com.example.ui.screens.UnpairConfirmationDialog
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MainViewModel
+import com.example.util.NotificationHelper
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,14 +41,20 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     setContent {
       MyApplicationTheme {
-        MainApp()
+        MainApp(intent = intent)
       }
     }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
   }
 }
 
 @Composable
 fun MainApp(
+  intent: Intent? = null,
   modifier: Modifier = Modifier,
   viewModel: MainViewModel = viewModel()
 ) {
@@ -68,6 +82,33 @@ fun MainApp(
   val isPartnerTyping by viewModel.isPartnerTyping.collectAsState()
   val coupleMemories by viewModel.coupleMemories.collectAsState()
   val doubleTapEmoji by viewModel.doubleTapEmoji.collectAsState()
+
+  val context = LocalContext.current
+
+  // Request Notification permission for Android 13+ (POST_NOTIFICATIONS)
+  val notificationPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+  ) { _ -> }
+
+  LaunchedEffect(Unit) {
+    // Create channel for Android 8+
+    NotificationHelper.createNotificationChannel(context)
+
+    // Request runtime permission for Android 13+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      if (!NotificationHelper.areNotificationsEnabled(context)) {
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+      }
+    }
+  }
+
+  // Check if opened from Chat Notification
+  LaunchedEffect(intent) {
+    val targetTab = intent?.getStringExtra("extra_tab")
+    if (targetTab == "chat") {
+      viewModel.selectTab(BottomNavTab.CHAT)
+    }
+  }
 
   Crossfade(
     targetState = currentUser,
@@ -184,6 +225,8 @@ fun MainApp(
                   memories = coupleMemories,
                   completedGoalsCount = completedGoals,
                   onOpenSettings = { viewModel.openSettings() },
+                  onChangeProfilePhoto = { viewModel.updateProfilePhoto(it) },
+                  onChangeAvatarPreset = { viewModel.updateProfilePreset(it) },
                   onAddMemory = { title, caption, loc, date, preset, base64, imageUri ->
                     viewModel.addCoupleMemory(title, caption, loc, date, preset, base64, imageUri)
                   },
@@ -203,6 +246,8 @@ fun MainApp(
       currentUser = currentUser!!,
       doubleTapEmoji = doubleTapEmoji,
       onSetDoubleTapEmoji = { viewModel.setDoubleTapEmoji(it) },
+      onChangeProfilePhoto = { viewModel.updateProfilePhoto(it) },
+      onChangeAvatarPreset = { viewModel.updateProfilePreset(it) },
       onDismiss = { viewModel.closeSettings() },
       onOpenUnpairConfirm = { viewModel.openUnpairConfirm() },
       onSignOut = { viewModel.signOut() }

@@ -96,7 +96,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.material3.CircularProgressIndicator
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.model.ChatMessage
 import com.example.model.UserProfile
 import com.example.ui.components.AvatarImage
@@ -144,6 +149,8 @@ fun ChatScreen(
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var editingMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var menuMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+    var fullPhotoPreviewUrl by remember { mutableStateOf<String?>(null) }
 
     val listState = rememberLazyListState()
     val partnerName = partnerUser?.displayName ?: currentUser.partnerName ?: "Sevgilin"
@@ -304,6 +311,7 @@ fun ChatScreen(
                     SwipeableMessageItem(
                         msg = msg,
                         isMe = isMe,
+                        isHighlighted = (msg.id == highlightedMessageId),
                         doubleTapEmoji = doubleTapEmoji,
                         partnerPreset = partnerUser?.avatarPreset ?: "flower_pink",
                         partnerBase64 = partnerUser?.avatarBase64,
@@ -317,6 +325,30 @@ fun ChatScreen(
                             if (!msg.isDeleted) {
                                 replyingToMessage = msg
                                 editingMessage = null
+                            }
+                        },
+                        onReplyClick = { replyId ->
+                            val targetIndex = messages.indexOfFirst { it.id == replyId }
+                            if (targetIndex != -1) {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(targetIndex)
+                                    highlightedMessageId = replyId
+                                    kotlinx.coroutines.delay(2000)
+                                    if (highlightedMessageId == replyId) {
+                                        highlightedMessageId = null
+                                    }
+                                }
+                            } else {
+                                Toast.makeText(context, "Orijinal mesaja ulaşılamadı", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onPhotoClick = { url ->
+                            fullPhotoPreviewUrl = url
+                        },
+                        onReactionPillClick = {
+                            if (!msg.isDeleted) {
+                                onReactMessage(msg.id, null)
+                                Toast.makeText(context, "Tepki kaldırıldı", Toast.LENGTH_SHORT).show()
                             }
                         },
                         onLongClick = {
@@ -776,7 +808,7 @@ fun ChatScreen(
                         }
                     }
 
-                // Option: Delete
+                // Option: Delete for Everyone
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -784,7 +816,7 @@ fun ChatScreen(
                         .clickable {
                             onDeleteMessage(targetMsg.id)
                             menuMessage = null
-                            Toast.makeText(context, "Mesaj silindi", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Mesaj herkes için silindi", Toast.LENGTH_SHORT).show()
                         }
                         .padding(vertical = 10.dp, horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -792,8 +824,8 @@ fun ChatScreen(
                     Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFD32F2F))
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text("Mesajı Sil", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFFD32F2F))
-                        Text("Sohbetten silinir ve '🚫 Bu mesaj silindi' olarak görünür", fontSize = 11.sp, color = SlateNavy.copy(alpha = 0.7f))
+                        Text("Herkes İçin Sil", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFFD32F2F))
+                        Text("Mesaj her iki tarafın sohbetinden de silinir", fontSize = 11.sp, color = SlateNavy.copy(alpha = 0.7f))
                     }
                 }
             } else {
@@ -818,17 +850,65 @@ fun ChatScreen(
             }
         }
     }
+
+    // Full Screen Photo Preview Dialog
+    if (fullPhotoPreviewUrl != null) {
+        Dialog(
+            onDismissRequest = { fullPhotoPreviewUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.94f))
+                    .clickable { fullPhotoPreviewUrl = null },
+                contentAlignment = Alignment.Center
+            ) {
+                SubcomposeAsyncImage(
+                    model = fullPhotoPreviewUrl,
+                    contentDescription = "Büyük Fotoğraf Önizlemesi",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentScale = ContentScale.Fit,
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = SoftCoralPrimary, strokeWidth = 3.dp)
+                        }
+                    }
+                )
+                IconButton(
+                    onClick = { fullPhotoPreviewUrl = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(20.dp)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Kapat", tint = Color.White)
+                }
+            }
+        }
+    }
 }
 
 @Composable
 fun SwipeableMessageItem(
     msg: ChatMessage,
     isMe: Boolean,
+    isHighlighted: Boolean = false,
     doubleTapEmoji: String,
     partnerPreset: String,
     partnerBase64: String?,
     onDoubleTap: () -> Unit,
     onReply: () -> Unit,
+    onReplyClick: ((String) -> Unit)? = null,
+    onPhotoClick: ((String) -> Unit)? = null,
+    onReactionPillClick: (() -> Unit)? = null,
     onLongClick: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -924,14 +1004,16 @@ fun SwipeableMessageItem(
                         )
                         .background(
                             when {
+                                isHighlighted -> if (isMe) SoftCoralPrimary else SoftCoralContainer
                                 msg.isDeleted -> if (isMe) Color(0xFFFDF2F2) else Color(0xFFF3F4F6)
                                 isMe -> SoftCoralPrimary
                                 else -> WarmCreamSurface
                             }
                         )
                         .border(
-                            width = 1.dp,
+                            width = if (isHighlighted) 2.5.dp else 1.dp,
                             color = when {
+                                isHighlighted -> SoftCoralDark
                                 msg.isDeleted -> if (isMe) Color(0xFFFBD5D5) else Color(0xFFE5E7EB)
                                 isMe -> SoftCoralPrimary
                                 else -> BorderSoft
@@ -994,7 +1076,7 @@ fun SwipeableMessageItem(
                         }
                     } else {
                         Column {
-                            // Replying To Quoted Bubble
+                            // Replying To Quoted Bubble (Clickable to jump to original message)
                             if (!msg.replyToText.isNullOrBlank()) {
                                 Row(
                                     modifier = Modifier
@@ -1003,17 +1085,20 @@ fun SwipeableMessageItem(
                                         .background(
                                             if (isMe) Color.White.copy(alpha = 0.2f) else WarmCreamContainer
                                         )
-                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        .clickable(enabled = !msg.replyToId.isNullOrBlank()) {
+                                            msg.replyToId?.let { onReplyClick?.invoke(it) }
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 5.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .width(3.dp)
-                                            .height(24.dp)
+                                            .width(3.5.dp)
+                                            .height(26.dp)
                                             .background(if (isMe) Color.White else SoftCoralPrimary, RoundedCornerShape(2.dp))
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         if (!msg.replyToSenderName.isNullOrBlank()) {
                                             Text(
                                                 text = msg.replyToSenderName,
@@ -1034,16 +1119,41 @@ fun SwipeableMessageItem(
                                 Spacer(modifier = Modifier.height(6.dp))
                             }
 
-                            // Photo attachment
+                            // Photo attachment with SubcomposeAsyncImage and loading indicator
                             if (msg.imageUrl != null) {
-                                AsyncImage(
+                                SubcomposeAsyncImage(
                                     model = msg.imageUrl,
                                     contentDescription = "Fotoğraf",
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(180.dp)
-                                        .clip(RoundedCornerShape(12.dp)),
-                                    contentScale = ContentScale.Crop
+                                        .height(190.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { onPhotoClick?.invoke(msg.imageUrl) },
+                                    contentScale = ContentScale.Crop,
+                                    loading = {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(if (isMe) Color.White.copy(alpha = 0.15f) else WarmCreamContainer),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                color = if (isMe) Color.White else SoftCoralPrimary,
+                                                strokeWidth = 2.5.dp,
+                                                modifier = Modifier.size(28.dp)
+                                            )
+                                        }
+                                    },
+                                    error = {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color(0xFFF3F4F6)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("Görsel yüklenemedi", fontSize = 12.sp, color = TextMuted)
+                                        }
+                                    }
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                             }
@@ -1113,7 +1223,7 @@ fun SwipeableMessageItem(
                     }
                 }
 
-                // Reaction Emoji Pill on Bottom Corner
+                // Reaction Emoji Pill on Bottom Corner (Clickable to remove reaction)
                 if (!msg.reactionEmoji.isNullOrBlank() && !msg.isDeleted) {
                     Box(
                         modifier = Modifier
@@ -1121,6 +1231,7 @@ fun SwipeableMessageItem(
                             .clip(CircleShape)
                             .background(WarmCreamSurface)
                             .border(1.dp, BorderSoft, CircleShape)
+                            .clickable { onReactionPillClick?.invoke() }
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(text = msg.reactionEmoji, fontSize = 12.sp)

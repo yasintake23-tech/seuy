@@ -336,6 +336,26 @@ class AuthRepository(private val context: Context) {
     }
 
     // Local Storage Helpers
+    suspend fun updateUserProfile(userId: String, updates: Map<String, Any?>): Result<Unit> {
+        return try {
+            firestore.collection("users").document(userId).set(updates, SetOptions.merge()).await()
+            val currentLocal = getLocalProfile()
+            if (currentLocal != null && currentLocal.userId == userId) {
+                val updated = currentLocal.copy(
+                    avatarPreset = (updates["avatarPreset"] as? String) ?: currentLocal.avatarPreset,
+                    avatarBase64 = if (updates.containsKey("avatarBase64")) (updates["avatarBase64"] as? String) else currentLocal.avatarBase64,
+                    displayName = (updates["displayName"] as? String) ?: currentLocal.displayName,
+                    birthDate = (updates["birthDate"] as? String) ?: currentLocal.birthDate
+                )
+                saveLocalProfile(updated)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating user profile: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
     fun saveLocalProfile(profile: UserProfile) {
         prefs.edit()
             .putString("user_id", profile.userId)

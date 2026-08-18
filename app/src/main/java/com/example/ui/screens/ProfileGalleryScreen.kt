@@ -77,15 +77,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.graphics.Brush
 import coil.compose.AsyncImage
 import com.example.model.CoupleMemory
 import com.example.model.RelationshipMilestone
 import com.example.model.UserProfile
+import com.example.ui.components.AVATAR_PRESETS
 import com.example.ui.components.AvatarImage
 import com.example.ui.components.MEMORY_PRESETS
 import com.example.ui.components.MemoryPresetImage
 import com.example.ui.theme.BorderSoft
 import com.example.ui.theme.DeepCharcoal
+import com.example.ui.theme.RoseDark
+import com.example.ui.theme.RoseLight
+import com.example.ui.theme.RosePrimary
+import com.example.ui.theme.RoseSoft
 import com.example.ui.theme.SageGreen
 import com.example.ui.theme.SlateNavy
 import com.example.ui.theme.SoftCoralContainer
@@ -110,13 +118,25 @@ fun ProfileGalleryScreen(
     memories: List<CoupleMemory>,
     completedGoalsCount: Int,
     onOpenSettings: () -> Unit,
+    onChangeProfilePhoto: (Uri) -> Unit = {},
+    onChangeAvatarPreset: (String) -> Unit = {},
     onAddMemory: (String, String, String, String, String, String?, Uri?) -> Unit,
     onToggleLikeMemory: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Grid, 1: Timeline
     var showAddMemoryDialog by remember { mutableStateOf(false) }
+    var showAvatarDialog by remember { mutableStateOf(false) }
     var viewingMemory by remember { mutableStateOf<CoupleMemory?>(null) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onChangeProfilePhoto(uri)
+            showAvatarDialog = false
+        }
+    }
 
     val partnerName = partnerUser?.displayName ?: currentUser.partnerName ?: "Sevgilin"
 
@@ -190,19 +210,40 @@ fun ProfileGalleryScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Connected Dual Avatars
+                        // Connected Dual Avatars (currentUser avatar is interactive)
                         Box(contentAlignment = Alignment.Center) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                AvatarImage(
-                                    preset = currentUser.avatarPreset,
-                                    base64 = currentUser.avatarBase64,
-                                    size = 54.dp
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clickable { showAvatarDialog = true }
+                                ) {
+                                    AvatarImage(
+                                        preset = currentUser.avatarPreset,
+                                        base64 = currentUser.avatarBase64,
+                                        size = 56.dp
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .size(20.dp)
+                                            .clip(CircleShape)
+                                            .background(SoftCoralPrimary)
+                                            .border(1.5.dp, Color.White, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CameraAlt,
+                                            contentDescription = "Fotoğrafı Değiştir",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
                                 AvatarImage(
                                     preset = partnerUser?.avatarPreset ?: "flower_pink",
                                     base64 = partnerUser?.avatarBase64,
-                                    size = 54.dp
+                                    size = 56.dp
                                 )
                             }
                             Box(
@@ -259,15 +300,35 @@ fun ProfileGalleryScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    // Bio / Romantic Quote
-                    Text(
-                        text = "✨ \"Birlikte yazılan en güzel aşk hikayesi...\"",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = DeepCharcoal
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "✨ \"Birlikte yazılan en güzel aşk hikayesi...\"",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = DeepCharcoal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(SoftCoralContainer)
+                                .clickable { showAvatarDialog = true }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "📷 Fotoğrafı Değiştir",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SoftCoralDark
+                            )
+                        }
+                    }
                     Text(
                         text = "İki kalp, tek dünya 💖 | Sonsuza kadar el ele.",
                         fontSize = 11.sp,
@@ -592,6 +653,100 @@ fun ProfileGalleryScreen(
                         isLikedByMe = !memory.isLikedByMe,
                         likesCount = if (memory.isLikedByMe) memory.likesCount - 1 else memory.likesCount + 1
                     )
+                }
+            )
+        }
+
+        // Change Profile Photo & Avatar Dialog
+        if (showAvatarDialog) {
+            AlertDialog(
+                onDismissRequest = { showAvatarDialog = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("📷 Profil Fotoğrafı", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = DeepCharcoal)
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Profil resminizi güncelleyerek sevgilinizin ekranında anında görünmesini sağlayın.",
+                            fontSize = 13.sp,
+                            color = SlateNavy,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Current Avatar Preview
+                        Box(contentAlignment = Alignment.Center) {
+                            AvatarImage(
+                                preset = currentUser.avatarPreset,
+                                base64 = currentUser.avatarBase64,
+                                size = 80.dp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Gallery pick button
+                        Button(
+                            onClick = { photoPickerLauncher.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = SoftCoralPrimary),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Galeriden Fotoğraf Seç", fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "veya Hazır Romantik Avatar Seç:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = SlateNavy
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(AVATAR_PRESETS) { item ->
+                                val isSelected = currentUser.avatarPreset == item.id && currentUser.avatarBase64 == null
+                                Box(
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .clip(CircleShape)
+                                        .background(Brush.linearGradient(listOf(item.bgColor1, item.bgColor2)))
+                                        .border(
+                                            width = if (isSelected) 3.dp else 1.dp,
+                                            color = if (isSelected) SoftCoralPrimary else Color.White,
+                                            shape = CircleShape
+                                        )
+                                        .clickable {
+                                            onChangeAvatarPreset(item.id)
+                                            showAvatarDialog = false
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = item.emoji, fontSize = 22.sp)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showAvatarDialog = false }) {
+                        Text("Kapat", color = SlateNavy)
+                    }
                 }
             )
         }

@@ -24,12 +24,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.example.util.NotificationHelper
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = AuthRepository(application.applicationContext)
     private val coupleRepository = CoupleDataRepository(application.applicationContext)
     private val r2StorageRepository = R2StorageRepository(application.applicationContext)
     private val prefs = application.getSharedPreferences("ikimiz_prefs", android.content.Context.MODE_PRIVATE)
+
+    private val notifiedMessageIds = mutableSetOf<String>()
+    private var isFirstChatLoad = true
 
     // Double Tap Reaction Emoji Preference (Default: 🤍)
     private val _doubleTapEmoji = MutableStateFlow(prefs.getString("double_tap_emoji", "🤍") ?: "🤍")
@@ -302,6 +306,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             m
                         }
                     }
+
+                    // Background & Out-of-chat notification for incoming messages from partner
+                    if (isFirstChatLoad) {
+                        processed.forEach { m -> notifiedMessageIds.add(m.id) }
+                        isFirstChatLoad = false
+                    } else {
+                        processed.forEach { m ->
+                            if ((m.senderId == uid2 || (m.senderId != uid1 && m.senderId != "me")) &&
+                                !notifiedMessageIds.contains(m.id) &&
+                                !m.isDeleted
+                            ) {
+                                notifiedMessageIds.add(m.id)
+                                if (_currentTab.value != BottomNavTab.CHAT) {
+                                    NotificationHelper.showChatNotification(
+                                        context = getApplication(),
+                                        senderName = _partnerUser.value?.displayName ?: "Sevgilin",
+                                        messageText = m.text,
+                                        messageId = m.id,
+                                        imageUrl = m.imageUrl
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     _chatMessages.value = processed
                     _isDataLoading.value = false
 
@@ -667,9 +696,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun reactToChatMessage(messageId: String, emoji: String?) {
+        val currentMsg = _chatMessages.value.find { it.id == messageId }
+        val finalEmoji = if (currentMsg?.reactionEmoji == emoji && emoji != null) null else emoji
+
         _chatMessages.value = _chatMessages.value.map { msg ->
             if (msg.id == messageId) {
-                msg.copy(reactionEmoji = emoji)
+                msg.copy(reactionEmoji = finalEmoji)
             } else {
                 msg
             }
@@ -680,7 +712,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
 
         viewModelScope.launch {
-            coupleRepository.reactToChatMessage(coupleId, messageId, emoji)
+            coupleRepository.reactToChatMessage(coupleId, messageId, finalEmoji)
+        }
+    }
+
+    fun updateProfilePhoto(imageUri: Uri) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            _isDataLoading.value = true
+            val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "profile_photos")
+            val publicUrl = uploadRes.getOrNull()
+            if (!publicUrl.isNullOrBlank()) {
+                authRepository.updateUserProfile(
+                    user.userId,
+                    mapOf(
+                        "avatarBase64" to publicUrl,
+                        "avatarPreset" to "custom"
+                    )
+                )
+                _currentUser.value = _currentUser.value?.copy(
+                    avatarBase64 = publicUrl,
+                    avatarPreset = "custom"
+                )
+            }
+            _isDataLoading.value = false
+        }
+    }
+
+    fun updateProfilePreset(preset: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            authRepository.updateUserProfile(
+                user.userId,
+                mapOf(
+                    "avatarPreset" to preset,
+                    "avatarBase64" to null
+                )
+            )
+            _currentUser.value = _currentUser.value?.copy(
+                avatarPreset = preset,
+                avatarBase64 = null
+            )
         }
     }
 

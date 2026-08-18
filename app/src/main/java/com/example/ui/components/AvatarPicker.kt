@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.ui.theme.BorderLight
 import com.example.ui.theme.CoralContainer
 import com.example.ui.theme.CoralLight
@@ -84,20 +85,12 @@ fun AvatarImage(
     size: Dp = 64.dp,
     modifier: Modifier = Modifier
 ) {
-    val bitmap = remember(base64) {
-        if (!base64.isNullOrEmpty()) {
-            try {
-                val decoded = Base64.decode(base64, Base64.DEFAULT)
-                BitmapFactory.decodeByteArray(decoded, 0, decoded.size)
-            } catch (e: Exception) {
-                null
-            }
-        } else null
-    }
+    val isHttpUrl = base64?.startsWith("http://") == true || base64?.startsWith("https://") == true
+    val isDataUri = base64?.startsWith("data:image") == true
 
-    if (bitmap != null) {
-        androidx.compose.foundation.Image(
-            bitmap = bitmap.asImageBitmap(),
+    if (isHttpUrl) {
+        AsyncImage(
+            model = base64,
             contentDescription = "Profil Fotoğrafı",
             contentScale = ContentScale.Crop,
             modifier = modifier
@@ -106,24 +99,48 @@ fun AvatarImage(
                 .border(2.dp, RosePrimary, CircleShape)
         )
     } else {
-        val selectedPreset = AVATAR_PRESETS.firstOrNull { it.id == preset } ?: AVATAR_PRESETS.first()
-        Box(
-            modifier = modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(selectedPreset.bgColor1, selectedPreset.bgColor2)
-                    )
-                )
-                .border(2.dp, Color.White, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            val emojiSize = (size.value * 0.48f).sp
-            Text(
-                text = selectedPreset.emoji,
-                fontSize = emojiSize
+        val bitmap = remember(base64) {
+            if (!base64.isNullOrEmpty()) {
+                try {
+                    val rawBase64 = if (isDataUri) base64.substringAfter(",") else base64
+                    val decoded = Base64.decode(rawBase64, Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(decoded, 0, decoded.size)
+                } catch (e: Exception) {
+                    null
+                }
+            } else null
+        }
+
+        if (bitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Profil Fotoğrafı",
+                contentScale = ContentScale.Crop,
+                modifier = modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .border(2.dp, RosePrimary, CircleShape)
             )
+        } else {
+            val selectedPreset = AVATAR_PRESETS.firstOrNull { it.id == preset } ?: AVATAR_PRESETS.first()
+            Box(
+                modifier = modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(selectedPreset.bgColor1, selectedPreset.bgColor2)
+                        )
+                    )
+                    .border(2.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                val emojiSize = (size.value * 0.48f).sp
+                Text(
+                    text = selectedPreset.emoji,
+                    fontSize = emojiSize
+                )
+            }
         }
     }
 }
