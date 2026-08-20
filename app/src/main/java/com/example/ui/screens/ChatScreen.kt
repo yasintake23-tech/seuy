@@ -61,10 +61,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -74,6 +76,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -172,6 +175,13 @@ fun ChatScreen(
 
     val doubleTapEmojiOptions = listOf("🤍", "❤️", "💖", "🥰", "✨", "🔥", "🌸", "🧸", "🐾")
 
+    val showScrollToBottom by remember {
+        derivedStateOf {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            messages.size > 4 && lastVisible < messages.size - 2
+        }
+    }
+
     // Mark messages as read on entry
     LaunchedEffect(Unit) {
         onMarkAsRead()
@@ -189,7 +199,6 @@ fun ChatScreen(
         modifier = modifier
             .fillMaxSize()
             .background(WarmCreamBackground)
-            .imePadding()
     ) {
         // Chat Header
         Card(
@@ -260,101 +269,135 @@ fun ChatScreen(
             }
         }
 
-        // Messages List or Empty State
-        if (messages.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(SoftCoralContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "💌", fontSize = 32.sp)
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Henüz mesaj yok",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DeepCharcoal
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Sevgiline ilk tatlı mesajını veya fotoğrafını göndererek sohbeti başlat 💖\n(İki kez dokunarak $doubleTapEmoji atabilirsin)",
-                        fontSize = 13.sp,
-                        color = SlateNavy,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(messages, key = { it.id }) { msg ->
-                    val isMe = msg.senderId == "me" || msg.senderId == currentUser.userId
-
-                    SwipeableMessageItem(
-                        msg = msg,
-                        isMe = isMe,
-                        isHighlighted = (msg.id == highlightedMessageId),
-                        doubleTapEmoji = doubleTapEmoji,
-                        partnerPreset = partnerUser?.avatarPreset ?: "flower_pink",
-                        partnerBase64 = partnerUser?.avatarBase64,
-                        onDoubleTap = {
-                            if (!msg.isDeleted) {
-                                val newReaction = if (msg.reactionEmoji == doubleTapEmoji) null else doubleTapEmoji
-                                onReactMessage(msg.id, newReaction)
-                            }
-                        },
-                        onReply = {
-                            if (!msg.isDeleted) {
-                                replyingToMessage = msg
-                                editingMessage = null
-                            }
-                        },
-                        onReplyClick = { replyId ->
-                            val targetIndex = messages.indexOfFirst { it.id == replyId }
-                            if (targetIndex != -1) {
-                                coroutineScope.launch {
-                                    listState.animateScrollToItem(targetIndex)
-                                    highlightedMessageId = replyId
-                                    kotlinx.coroutines.delay(2000)
-                                    if (highlightedMessageId == replyId) {
-                                        highlightedMessageId = null
-                                    }
-                                }
-                            } else {
-                                Toast.makeText(context, "Orijinal mesaja ulaşılamadı", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onPhotoClick = { url ->
-                            fullPhotoPreviewUrl = url
-                        },
-                        onReactionPillClick = {
-                            if (!msg.isDeleted) {
-                                onReactMessage(msg.id, null)
-                                Toast.makeText(context, "Tepki kaldırıldı", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onLongClick = {
-                            menuMessage = msg
+        // Messages List Container with Scroll to Bottom Button
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            if (messages.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(SoftCoralContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "💌", fontSize = 32.sp)
                         }
-                    )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Henüz mesaj yok",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DeepCharcoal
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Sevgiline ilk tatlı mesajını veya fotoğrafını göndererek sohbeti başlat 💖\n(İki kez dokunarak $doubleTapEmoji atabilirsin)",
+                            fontSize = 13.sp,
+                            color = SlateNavy,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(messages, key = { it.id }) { msg ->
+                        val isMe = msg.senderId == "me" || msg.senderId == currentUser.userId
+
+                        SwipeableMessageItem(
+                            msg = msg,
+                            isMe = isMe,
+                            isHighlighted = (msg.id == highlightedMessageId),
+                            doubleTapEmoji = doubleTapEmoji,
+                            partnerPreset = partnerUser?.avatarPreset ?: "flower_pink",
+                            partnerBase64 = partnerUser?.avatarBase64,
+                            onDoubleTap = {
+                                if (!msg.isDeleted) {
+                                    val newReaction = if (msg.reactionEmoji == doubleTapEmoji) null else doubleTapEmoji
+                                    onReactMessage(msg.id, newReaction)
+                                }
+                            },
+                            onReply = {
+                                if (!msg.isDeleted) {
+                                    replyingToMessage = msg
+                                    editingMessage = null
+                                }
+                            },
+                            onReplyClick = { replyId ->
+                                val targetIndex = messages.indexOfFirst { it.id == replyId }
+                                if (targetIndex != -1) {
+                                    coroutineScope.launch {
+                                        listState.animateScrollToItem(targetIndex)
+                                        highlightedMessageId = replyId
+                                        kotlinx.coroutines.delay(2000)
+                                        if (highlightedMessageId == replyId) {
+                                            highlightedMessageId = null
+                                        }
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Orijinal mesaja ulaşılamadı", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onPhotoClick = { url ->
+                                fullPhotoPreviewUrl = url
+                            },
+                            onReactionPillClick = {
+                                if (!msg.isDeleted) {
+                                    onReactMessage(msg.id, null)
+                                    Toast.makeText(context, "Tepki kaldırıldı", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onLongClick = {
+                                menuMessage = msg
+                            }
+                        )
+                    }
+                }
+
+                // Scroll To Bottom Floating Action Button
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showScrollToBottom,
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 12.dp)
+                ) {
+                    FloatingActionButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                if (messages.isNotEmpty()) {
+                                    listState.animateScrollToItem(messages.size - 1)
+                                }
+                            }
+                        },
+                        containerColor = SoftCoralPrimary,
+                        contentColor = Color.White,
+                        shape = CircleShape,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Aşağı Kaydır",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1120,15 +1163,16 @@ fun SwipeableMessageItem(
                             }
 
                             // Photo attachment with SubcomposeAsyncImage and loading indicator
-                            if (msg.imageUrl != null) {
+                            val mediaPhotoUrl = msg.effectiveMediaUrl
+                            if (mediaPhotoUrl != null) {
                                 SubcomposeAsyncImage(
-                                    model = msg.imageUrl,
+                                    model = mediaPhotoUrl,
                                     contentDescription = "Fotoğraf",
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(190.dp)
                                         .clip(RoundedCornerShape(12.dp))
-                                        .clickable { onPhotoClick?.invoke(msg.imageUrl) },
+                                        .clickable { onPhotoClick?.invoke(mediaPhotoUrl) },
                                     contentScale = ContentScale.Crop,
                                     loading = {
                                         Box(

@@ -49,6 +49,7 @@ import com.example.ui.theme.WarmCreamSurface
 fun CoupleBottomNavigationBar(
     currentTab: BottomNavTab,
     onTabSelected: (BottomNavTab) -> Unit,
+    unreadMessageCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -70,6 +71,7 @@ fun CoupleBottomNavigationBar(
             BottomNavTab.values().forEach { tab ->
                 val isSelected = currentTab == tab
                 val isCenterHome = tab == BottomNavTab.HOME
+                val showBadge = tab == BottomNavTab.CHAT && unreadMessageCount > 0
 
                 if (isCenterHome) {
                     // Center Elevated "Biz" Home Button
@@ -144,12 +146,34 @@ fun CoupleBottomNavigationBar(
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                                contentDescription = tab.title,
-                                tint = tintColor,
-                                modifier = Modifier.size(22.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
+                                    contentDescription = tab.title,
+                                    tint = tintColor,
+                                    modifier = Modifier.size(22.dp)
+                                )
+
+                                if (showBadge) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFE53935))
+                                            .border(1.dp, Color.White, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (unreadMessageCount > 99) "99+" else unreadMessageCount.toString(),
+                                            color = Color.White,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
                         }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(

@@ -268,6 +268,7 @@ class ChatRepository(private val context: Context) {
                 "deleted" to true,
                 "text" to "",
                 "messageText" to "",
+                "mediaUrl" to null,
                 "imageUrl" to null,
                 "reactionEmoji" to null
             )

@@ -79,6 +79,7 @@ fun MainApp(
   val partnerStatus by viewModel.partnerStatus.collectAsState()
   val memoryPins by viewModel.memoryPins.collectAsState()
   val chatMessages by viewModel.chatMessages.collectAsState()
+  val unreadMessageCount by viewModel.unreadMessageCount.collectAsState()
   val isPartnerTyping by viewModel.isPartnerTyping.collectAsState()
   val coupleMemories by viewModel.coupleMemories.collectAsState()
   val doubleTapEmoji by viewModel.doubleTapEmoji.collectAsState()
@@ -157,7 +158,8 @@ fun MainApp(
           bottomBar = {
             CoupleBottomNavigationBar(
               currentTab = currentTab,
-              onTabSelected = { viewModel.selectTab(it) }
+              onTabSelected = { viewModel.selectTab(it) },
+              unreadMessageCount = unreadMessageCount
             )
           }
         ) { innerPadding ->

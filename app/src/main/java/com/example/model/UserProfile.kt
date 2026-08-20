@@ -7,6 +7,7 @@ data class UserProfile(
     val email: String = "",
     val avatarPreset: String = "heart_rose", // "heart_rose", "bear_cute", "star_gold", "flower_pink", "couple_silhouette", "cat_white"
     val avatarBase64: String? = null,
+    val profileImageUrl: String? = avatarBase64,
     val pairingCode: String = "",
     val partnerId: String? = null,
     val partnerName: String? = null,
@@ -15,14 +16,19 @@ data class UserProfile(
     val createdAt: Long = System.currentTimeMillis(),
     val lastActive: Long = System.currentTimeMillis()
 ) {
+    val displayPhotoUrl: String?
+        get() = profileImageUrl?.takeIf { it.isNotBlank() } ?: avatarBase64?.takeIf { it.isNotBlank() }
+
     fun toMap(): Map<String, Any?> {
+        val effectivePhoto = profileImageUrl ?: avatarBase64
         return mapOf(
             "userId" to userId,
             "displayName" to displayName,
             "birthDate" to birthDate,
             "email" to email,
             "avatarPreset" to avatarPreset,
-            "avatarBase64" to avatarBase64,
+            "avatarBase64" to effectivePhoto,
+            "profileImageUrl" to effectivePhoto,
             "pairingCode" to pairingCode,
             "partnerId" to partnerId,
             "partnerName" to partnerName,
@@ -35,13 +41,17 @@ data class UserProfile(
 
     companion object {
         fun fromMap(map: Map<String, Any?>): UserProfile {
+            val photo = (map["profileImageUrl"] as? String)?.takeIf { it.isNotBlank() }
+                ?: (map["avatarBase64"] as? String)?.takeIf { it.isNotBlank() }
+
             return UserProfile(
                 userId = (map["userId"] as? String) ?: "",
                 displayName = (map["displayName"] as? String) ?: "",
                 birthDate = (map["birthDate"] as? String) ?: "",
                 email = (map["email"] as? String) ?: "",
                 avatarPreset = (map["avatarPreset"] as? String) ?: "heart_rose",
-                avatarBase64 = map["avatarBase64"] as? String,
+                avatarBase64 = photo,
+                profileImageUrl = photo,
                 pairingCode = (map["pairingCode"] as? String) ?: "",
                 partnerId = map["partnerId"] as? String,
                 partnerName = map["partnerName"] as? String,

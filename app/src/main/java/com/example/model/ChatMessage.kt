@@ -10,7 +10,8 @@ data class ChatMessage(
     val reactionEmoji: String? = null,
     val isPhoto: Boolean = false,
     val photoPreset: String? = null,
-    val imageUrl: String? = null,
+    val mediaUrl: String? = null,
+    val imageUrl: String? = mediaUrl,
     val isRead: Boolean = false,
     val replyToText: String? = null,
     val replyToSenderName: String? = null,
@@ -18,26 +19,36 @@ data class ChatMessage(
     val isEdited: Boolean = false,
     val isDeleted: Boolean = false
 ) {
-    fun toMap(): Map<String, Any?> = mapOf(
-        "id" to id,
-        "senderId" to senderId,
-        "receiverId" to receiverId,
-        "senderName" to senderName,
-        "text" to (if (isDeleted) "" else text),
-        "messageText" to (if (isDeleted) "" else text),
-        "timestamp" to timestamp,
-        "reactionEmoji" to (if (isDeleted) null else reactionEmoji),
-        "isPhoto" to (if (isDeleted) false else isPhoto),
-        "photoPreset" to (if (isDeleted) null else photoPreset),
-        "imageUrl" to (if (isDeleted) null else imageUrl),
-        "isRead" to isRead,
-        "replyToText" to replyToText,
-        "replyToSenderName" to replyToSenderName,
-        "replyToId" to replyToId,
-        "isEdited" to isEdited,
-        "isDeleted" to isDeleted,
-        "deleted" to isDeleted
-    )
+    val displayMediaUrl: String?
+        get() = mediaUrl?.takeIf { it.isNotBlank() } ?: imageUrl?.takeIf { it.isNotBlank() }
+
+    val effectiveMediaUrl: String?
+        get() = displayMediaUrl
+
+    fun toMap(): Map<String, Any?> {
+        val effectiveMedia = if (isDeleted) null else (mediaUrl ?: imageUrl)
+        return mapOf(
+            "id" to id,
+            "senderId" to senderId,
+            "receiverId" to receiverId,
+            "senderName" to senderName,
+            "text" to (if (isDeleted) "" else text),
+            "messageText" to (if (isDeleted) "" else text),
+            "timestamp" to timestamp,
+            "reactionEmoji" to (if (isDeleted) null else reactionEmoji),
+            "isPhoto" to (if (isDeleted) false else (isPhoto || !effectiveMedia.isNullOrBlank())),
+            "photoPreset" to (if (isDeleted) null else photoPreset),
+            "mediaUrl" to effectiveMedia,
+            "imageUrl" to effectiveMedia,
+            "isRead" to isRead,
+            "replyToText" to replyToText,
+            "replyToSenderName" to replyToSenderName,
+            "replyToId" to replyToId,
+            "isEdited" to isEdited,
+            "isDeleted" to isDeleted,
+            "deleted" to isDeleted
+        )
+    }
 
     companion object {
         fun fromMap(map: Map<String, Any?>): ChatMessage {
@@ -49,7 +60,8 @@ data class ChatMessage(
             }
 
             val rawText = (map["messageText"] as? String) ?: (map["text"] as? String) ?: ""
-            val rawImage = map["imageUrl"] as? String
+            val rawMedia = (map["mediaUrl"] as? String)?.takeIf { it.isNotBlank() }
+                ?: (map["imageUrl"] as? String)?.takeIf { it.isNotBlank() }
 
             return ChatMessage(
                 id = (map["id"] as? String) ?: "",
@@ -59,9 +71,10 @@ data class ChatMessage(
                 text = if (isDel) "" else rawText,
                 timestamp = (map["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis(),
                 reactionEmoji = if (isDel) null else (map["reactionEmoji"] as? String),
-                isPhoto = if (isDel) false else ((map["isPhoto"] as? Boolean) ?: false),
+                isPhoto = if (isDel) false else (((map["isPhoto"] as? Boolean) ?: false) || rawMedia != null),
                 photoPreset = if (isDel) null else (map["photoPreset"] as? String),
-                imageUrl = if (isDel) null else rawImage,
+                mediaUrl = if (isDel) null else rawMedia,
+                imageUrl = if (isDel) null else rawMedia,
                 isRead = (map["isRead"] as? Boolean) ?: false,
                 replyToText = map["replyToText"] as? String,
                 replyToSenderName = map["replyToSenderName"] as? String,

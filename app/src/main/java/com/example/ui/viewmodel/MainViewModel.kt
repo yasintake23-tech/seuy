@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AuthRepository
 import com.example.data.CoupleDataRepository
+import com.example.data.ProfileRepository
 import com.example.data.R2StorageRepository
 import com.example.model.BottomNavTab
 import com.example.model.BucketItem
@@ -19,9 +20,12 @@ import com.example.model.SecretLoveNote
 import com.example.model.UserProfile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 import com.example.util.NotificationHelper
@@ -30,6 +34,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = AuthRepository(application.applicationContext)
     private val coupleRepository = CoupleDataRepository(application.applicationContext)
     private val r2StorageRepository = R2StorageRepository(application.applicationContext)
+    private val profileRepository = ProfileRepository(application.applicationContext, authRepository, r2StorageRepository)
     private val prefs = application.getSharedPreferences("ikimiz_prefs", android.content.Context.MODE_PRIVATE)
 
     private val notifiedMessageIds = mutableSetOf<String>()
@@ -113,6 +118,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // DM / Realtime Database Chat
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
+
+    val unreadMessageCount: StateFlow<Int> = _chatMessages.map { msgs ->
+        val currentUid = _currentUser.value?.userId ?: ""
+        if (currentUid.isBlank()) 0
+        else {
+            msgs.count { msg ->
+                !msg.isDeleted && !msg.isRead && (msg.receiverId == currentUid || (msg.senderId != currentUid && msg.senderId != "me"))
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private val _isPartnerTyping = MutableStateFlow(false)
     val isPartnerTyping: StateFlow<Boolean> = _isPartnerTyping.asStateFlow()
@@ -607,6 +622,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             receiverId = partnerId,
             senderName = user.displayName,
             text = text,
+            mediaUrl = null,
             imageUrl = null,
             timestamp = System.currentTimeMillis(),
             isRead = false,
@@ -619,14 +635,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _chatMessages.value = _chatMessages.value + tempMsg
 
         viewModelScope.launch {
-            var imageUrl: String? = null
+            var mediaUrl: String? = null
             if (imageUri != null) {
-                val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "chat_photos")
-                imageUrl = uploadRes.getOrNull()
+                val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "ikimiz-media/chat_photos")
+                mediaUrl = uploadRes.getOrNull()
             }
 
-            val finalMsg = tempMsg.copy(imageUrl = imageUrl)
-            // Update in local state with image URL
+            val finalMsg = tempMsg.copy(mediaUrl = mediaUrl, imageUrl = mediaUrl)
+            // Update in local state with media URL
             _chatMessages.value = _chatMessages.value.map { if (it.id == newMsgId) finalMsg else it }
             coupleRepository.sendChatMessage(coupleId, finalMsg)
             setTyping(false)
@@ -720,18 +736,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val user = _currentUser.value ?: return
         viewModelScope.launch {
             _isDataLoading.value = true
-            val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "profile_photos")
-            val publicUrl = uploadRes.getOrNull()
-            if (!publicUrl.isNullOrBlank()) {
-                authRepository.updateUserProfile(
-                    user.userId,
-                    mapOf(
-                        "avatarBase64" to publicUrl,
-                        "avatarPreset" to "custom"
-                    )
-                )
+            val result = profileRepository.updateProfilePhoto(user.userId, imageUri)
+            result.onSuccess { publicUrl ->
                 _currentUser.value = _currentUser.value?.copy(
                     avatarBase64 = publicUrl,
+                    profileImageUrl = publicUrl,
                     avatarPreset = "custom"
                 )
             }
@@ -742,16 +751,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateProfilePreset(preset: String) {
         val user = _currentUser.value ?: return
         viewModelScope.launch {
-            authRepository.updateUserProfile(
-                user.userId,
-                mapOf(
-                    "avatarPreset" to preset,
-                    "avatarBase64" to null
-                )
-            )
+            profileRepository.updateProfilePreset(user.userId, preset)
             _currentUser.value = _currentUser.value?.copy(
                 avatarPreset = preset,
-                avatarBase64 = null
+                avatarBase64 = null,
+                profileImageUrl = null
             )
         }
     }
