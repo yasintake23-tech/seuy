@@ -10,7 +10,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -32,6 +35,7 @@ import com.example.ui.screens.ProfileGalleryScreen
 import com.example.ui.screens.SettingsDialog
 import com.example.ui.screens.UnpairConfirmationDialog
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.WarmCreamBackground
 import com.example.ui.viewmodel.MainViewModel
 import com.example.util.NotificationHelper
 
@@ -52,6 +56,7 @@ class MainActivity : ComponentActivity() {
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MainApp(
   intent: Intent? = null,
@@ -152,15 +157,21 @@ fun MainApp(
         }
       }
       else -> {
+        val isImeVisible = WindowInsets.isImeVisible
+
         // 5-Tab Paired Couple Space
         Scaffold(
           modifier = Modifier.fillMaxSize(),
+          containerColor = WarmCreamBackground,
+          contentWindowInsets = WindowInsets(0, 0, 0, 0),
           bottomBar = {
-            CoupleBottomNavigationBar(
-              currentTab = currentTab,
-              onTabSelected = { viewModel.selectTab(it) },
-              unreadMessageCount = unreadMessageCount
-            )
+            if (!isImeVisible) {
+              CoupleBottomNavigationBar(
+                currentTab = currentTab,
+                onTabSelected = { viewModel.selectTab(it) },
+                unreadMessageCount = unreadMessageCount
+              )
+            }
           }
         ) { innerPadding ->
           Crossfade(

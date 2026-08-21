@@ -3,7 +3,9 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Base64
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +25,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -88,6 +91,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -198,6 +202,7 @@ fun ChatScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .imePadding()
             .background(WarmCreamBackground)
     ) {
         // Chat Header
@@ -551,6 +556,54 @@ fun ChatScreen(
             }
         }
 
+        // Selected Photo Preview Banner
+        androidx.compose.animation.AnimatedVisibility(
+            visible = selectedImageUri != null,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut()
+        ) {
+            selectedImageUri?.let { uri ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(WarmCreamSurface)
+                        .border(1.dp, BorderSoft)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = "Seçilen Fotoğraf",
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.5.dp, SoftCoralPrimary, RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "📸 Fotoğraf Eklendi",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SoftCoralDark
+                        )
+                        Text(
+                            text = "Gönder butonuna basarak sevgiline iletebilirsin",
+                            fontSize = 11.sp,
+                            color = SlateNavy
+                        )
+                    }
+                    IconButton(
+                        onClick = { selectedImageUri = null },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Kaldır", tint = SlateNavy, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
+
         // Quick Love Prompts Row
         LazyRow(
             modifier = Modifier
@@ -577,18 +630,18 @@ fun ChatScreen(
             }
         }
 
-        // Input Field Bar (High contrast and clear text readability)
+        // Input Field Bar (Comfortable padding and rounded card design)
         Card(
             colors = CardDefaults.cardColors(containerColor = WarmCreamSurface),
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, BorderSoft, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .border(1.dp, BorderSoft, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -907,21 +960,14 @@ fun ChatScreen(
                     .clickable { fullPhotoPreviewUrl = null },
                 contentAlignment = Alignment.Center
             ) {
-                SubcomposeAsyncImage(
-                    model = fullPhotoPreviewUrl,
+                SmartChatMessageImage(
+                    mediaUrl = fullPhotoPreviewUrl!!,
                     contentDescription = "Büyük Fotoğraf Önizlemesi",
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
                     contentScale = ContentScale.Fit,
-                    loading = {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = SoftCoralPrimary, strokeWidth = 3.dp)
-                        }
-                    }
+                    isMe = true
                 )
                 IconButton(
                     onClick = { fullPhotoPreviewUrl = null },
@@ -1162,42 +1208,19 @@ fun SwipeableMessageItem(
                                 Spacer(modifier = Modifier.height(6.dp))
                             }
 
-                            // Photo attachment with SubcomposeAsyncImage and loading indicator
+                            // Photo attachment with SmartChatMessageImage (supports Base64, Uri, S3/R2 presigned URLs)
                             val mediaPhotoUrl = msg.effectiveMediaUrl
                             if (mediaPhotoUrl != null) {
-                                SubcomposeAsyncImage(
-                                    model = mediaPhotoUrl,
+                                SmartChatMessageImage(
+                                    mediaUrl = mediaPhotoUrl,
                                     contentDescription = "Fotoğraf",
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(190.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable { onPhotoClick?.invoke(mediaPhotoUrl) },
+                                        .clip(RoundedCornerShape(12.dp)),
                                     contentScale = ContentScale.Crop,
-                                    loading = {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(if (isMe) Color.White.copy(alpha = 0.15f) else WarmCreamContainer),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            CircularProgressIndicator(
-                                                color = if (isMe) Color.White else SoftCoralPrimary,
-                                                strokeWidth = 2.5.dp,
-                                                modifier = Modifier.size(28.dp)
-                                            )
-                                        }
-                                    },
-                                    error = {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(Color(0xFFF3F4F6)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text("Görsel yüklenemedi", fontSize = 12.sp, color = TextMuted)
-                                        }
-                                    }
+                                    isMe = isMe,
+                                    onPhotoClick = onPhotoClick
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                             }
@@ -1356,3 +1379,92 @@ fun TypingDotsIndicator(modifier: Modifier = Modifier) {
         )
     }
 }
+
+@Composable
+fun SmartChatMessageImage(
+    mediaUrl: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    isMe: Boolean = true,
+    onPhotoClick: ((String) -> Unit)? = null
+) {
+    val decodedBitmap = remember(mediaUrl) {
+        if (mediaUrl.startsWith("data:image") || (!mediaUrl.startsWith("http://") && !mediaUrl.startsWith("https://") && !mediaUrl.startsWith("content://") && !mediaUrl.startsWith("file://") && mediaUrl.length > 30)) {
+            try {
+                val raw = if (mediaUrl.startsWith("data:image")) mediaUrl.substringAfter(",") else mediaUrl
+                val cleanRaw = raw.replace("\n", "").replace("\r", "").trim()
+                val decoded = Base64.decode(cleanRaw, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(decoded, 0, decoded.size)
+            } catch (e: Exception) {
+                null
+            }
+        } else null
+    }
+
+    if (decodedBitmap != null) {
+        Image(
+            bitmap = decodedBitmap.asImageBitmap(),
+            contentDescription = contentDescription,
+            modifier = modifier
+                .clickable { onPhotoClick?.invoke(mediaUrl) },
+            contentScale = contentScale
+        )
+    } else {
+        SubcomposeAsyncImage(
+            model = mediaUrl,
+            contentDescription = contentDescription,
+            modifier = modifier
+                .clickable { onPhotoClick?.invoke(mediaUrl) },
+            contentScale = contentScale,
+            loading = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(if (isMe) Color.White.copy(alpha = 0.15f) else WarmCreamContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = if (isMe) Color.White else SoftCoralPrimary,
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            },
+            error = {
+                val fallbackBitmap = remember(mediaUrl) {
+                    try {
+                        val raw = if (mediaUrl.startsWith("data:image")) mediaUrl.substringAfter(",") else mediaUrl
+                        val cleanRaw = raw.replace("\n", "").replace("\r", "").trim()
+                        val decoded = Base64.decode(cleanRaw, Base64.DEFAULT)
+                        BitmapFactory.decodeByteArray(decoded, 0, decoded.size)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                if (fallbackBitmap != null) {
+                    Image(
+                        bitmap = fallbackBitmap.asImageBitmap(),
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = contentScale
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFFF3F4F6)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Görsel yüklenemedi",
+                            fontSize = 12.sp,
+                            color = TextMuted
+                        )
+                    }
+                }
+            }
+        )
+    }
+}
+

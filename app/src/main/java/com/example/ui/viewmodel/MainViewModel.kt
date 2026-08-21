@@ -18,6 +18,7 @@ import com.example.model.PairingResult
 import com.example.model.PartnerStatus
 import com.example.model.SecretLoveNote
 import com.example.model.UserProfile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -616,14 +617,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val coupleId = if (user.partnerId != null) coupleRepository.getCoupleDocId(user.userId, user.partnerId!!) else "couple_${user.userId}"
 
         val newMsgId = UUID.randomUUID().toString()
+        val base64Compressed = if (imageUri != null) r2StorageRepository.compressUriToBase64(imageUri, 600, 600, 75) else null
+        val localPreview = base64Compressed ?: imageUri?.toString()
+        val hasPhoto = (imageUri != null)
+
         val tempMsg = ChatMessage(
             id = newMsgId,
             senderId = user.userId,
             receiverId = partnerId,
             senderName = user.displayName,
             text = text,
-            mediaUrl = null,
-            imageUrl = null,
+            isPhoto = hasPhoto,
+            mediaUrl = localPreview,
+            imageUrl = localPreview,
             timestamp = System.currentTimeMillis(),
             isRead = false,
             replyToText = if (replyToMessage?.isDeleted == true) "🚫 Bu mesaj silindi" else replyToMessage?.text?.take(80),
@@ -631,18 +637,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             replyToId = replyToMessage?.id
         )
 
-        // Optimistic append
+        // Optimistic append - instant rendering in chat
         _chatMessages.value = _chatMessages.value + tempMsg
 
-        viewModelScope.launch {
-            var mediaUrl: String? = null
+        viewModelScope.launch(Dispatchers.IO) {
+            var mediaUrl: String? = base64Compressed
             if (imageUri != null) {
-                val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "ikimiz-media/chat_photos")
-                mediaUrl = uploadRes.getOrNull()
+                // If base64 wasn't generated synchronously, generate it now
+                if (mediaUrl.isNullOrBlank()) {
+                    mediaUrl = r2StorageRepository.compressUriToBase64(imageUri, 600, 600, 75)
+                }
+                
+                // Optional R2 cloud backup in background if configured
+                try {
+                    val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "ikimiz-media/chat_photos")
+                    val uploaded = uploadRes.getOrNull()
+                    // If cloud storage returned a permanent public or valid URL, prioritize it if not expiring
+                    if (!uploaded.isNullOrBlank() && !uploaded.startsWith("data:image") && !uploaded.contains("X-Amz-Expires")) {
+                        mediaUrl = uploaded
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("MainViewModel", "Optional R2 upload skipped/failed: ${e.message}")
+                }
             }
 
-            val finalMsg = tempMsg.copy(mediaUrl = mediaUrl, imageUrl = mediaUrl)
-            // Update in local state with media URL
+            val finalMsg = tempMsg.copy(
+                isPhoto = (mediaUrl != null),
+                mediaUrl = mediaUrl,
+                imageUrl = mediaUrl
+            )
+            // Update in local state with persistent media URL
             _chatMessages.value = _chatMessages.value.map { if (it.id == newMsgId) finalMsg else it }
             coupleRepository.sendChatMessage(coupleId, finalMsg)
             setTyping(false)
@@ -734,15 +758,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateProfilePhoto(imageUri: Uri) {
         val user = _currentUser.value ?: return
-        viewModelScope.launch {
+
+        // 1. INSTANT ZERO-LATENCY UPDATE: Compress to base64 immediately for 0ms visual update
+        val compressedBase64 = r2StorageRepository.compressUriToBase64(imageUri, 500, 500, 80)
+        val localPreview = compressedBase64 ?: imageUri.toString()
+        val optimisticUser = user.copy(
+            avatarBase64 = localPreview,
+            profileImageUrl = localPreview,
+            avatarPreset = "custom"
+        )
+        _currentUser.value = optimisticUser
+        authRepository.saveLocalProfile(optimisticUser)
+
+        viewModelScope.launch(Dispatchers.IO) {
             _isDataLoading.value = true
             val result = profileRepository.updateProfilePhoto(user.userId, imageUri)
             result.onSuccess { publicUrl ->
-                _currentUser.value = _currentUser.value?.copy(
+                val updatedUser = optimisticUser.copy(
                     avatarBase64 = publicUrl,
                     profileImageUrl = publicUrl,
                     avatarPreset = "custom"
                 )
+                _currentUser.value = updatedUser
+                authRepository.saveLocalProfile(updatedUser)
             }
             _isDataLoading.value = false
         }

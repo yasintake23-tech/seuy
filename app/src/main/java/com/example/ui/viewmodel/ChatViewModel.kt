@@ -51,13 +51,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (cid.isBlank() || uid.isBlank()) return
 
         val msgId = UUID.randomUUID().toString()
+        val localPreview = imageUri?.toString()
+        val hasPhoto = (imageUri != null)
         val tempMsg = ChatMessage(
             id = msgId,
             senderId = uid,
             senderName = senderName,
             text = text,
-            mediaUrl = null,
-            imageUrl = null,
+            isPhoto = hasPhoto,
+            mediaUrl = localPreview,
+            imageUrl = localPreview,
             timestamp = System.currentTimeMillis(),
             isRead = false,
             replyToText = replyTo?.text?.take(80),
@@ -71,9 +74,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             var mediaUrl: String? = null
             if (imageUri != null) {
                 val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "ikimiz-media/chat_photos")
-                mediaUrl = uploadRes.getOrNull()
+                mediaUrl = uploadRes.getOrNull() ?: localPreview
             }
-            val finalMsg = tempMsg.copy(mediaUrl = mediaUrl, imageUrl = mediaUrl)
+            val finalMsg = tempMsg.copy(isPhoto = (mediaUrl != null), mediaUrl = mediaUrl, imageUrl = mediaUrl)
             _chatMessages.value = _chatMessages.value.map { if (it.id == msgId) finalMsg else it }
             coupleRepository.sendChatMessage(cid, finalMsg)
         }

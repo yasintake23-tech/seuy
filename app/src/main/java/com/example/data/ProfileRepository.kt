@@ -36,6 +36,8 @@ class ProfileRepository(
         return try {
             val uploadRes = r2StorageRepository.uploadImageUri(imageUri, "profile_photos")
             val publicUrl = uploadRes.getOrNull()
+                ?: r2StorageRepository.compressUriToBase64(imageUri, 600, 600, 80)
+
             if (publicUrl.isNullOrBlank()) {
                 return Result.failure(Exception("Görsel yüklenemedi. Lütfen internet bağlantınızı kontrol edin."))
             }
@@ -56,7 +58,19 @@ class ProfileRepository(
             Result.success(publicUrl)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update profile photo", e)
-            Result.failure(e)
+            val fallbackBase64 = r2StorageRepository.compressUriToBase64(imageUri, 600, 600, 80)
+            if (!fallbackBase64.isNullOrBlank()) {
+                val updates = mapOf(
+                    "profileImageUrl" to fallbackBase64,
+                    "avatarBase64" to fallbackBase64,
+                    "avatarPreset" to "custom",
+                    "lastActive" to System.currentTimeMillis()
+                )
+                authRepository.updateUserProfile(userId, updates)
+                Result.success(fallbackBase64)
+            } else {
+                Result.failure(e)
+            }
         }
     }
 

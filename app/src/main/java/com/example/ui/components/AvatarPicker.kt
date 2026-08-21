@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -85,12 +86,26 @@ fun AvatarImage(
     size: Dp = 64.dp,
     modifier: Modifier = Modifier
 ) {
-    val isHttpUrl = base64?.startsWith("http://") == true || base64?.startsWith("https://") == true
-    val isDataUri = base64?.startsWith("data:image") == true
+    val selectedPreset = remember(preset) {
+        AVATAR_PRESETS.firstOrNull { it.id == preset } ?: AVATAR_PRESETS.first()
+    }
 
-    if (isHttpUrl) {
-        AsyncImage(
-            model = base64,
+    // Try decoding base64 if it is a data URI or raw base64 string
+    val decodedBitmap = remember(base64) {
+        if (!base64.isNullOrBlank() && (base64.startsWith("data:image") || (!base64.startsWith("http://") && !base64.startsWith("https://") && !base64.startsWith("content://") && !base64.startsWith("file://") && base64.length > 50))) {
+            try {
+                val raw = if (base64.startsWith("data:image")) base64.substringAfter(",") else base64
+                val decoded = Base64.decode(raw, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(decoded, 0, decoded.size)
+            } catch (e: Exception) {
+                null
+            }
+        } else null
+    }
+
+    if (decodedBitmap != null) {
+        androidx.compose.foundation.Image(
+            bitmap = decodedBitmap.asImageBitmap(),
             contentDescription = "Profil Fotoğrafı",
             contentScale = ContentScale.Crop,
             modifier = modifier
@@ -98,49 +113,64 @@ fun AvatarImage(
                 .clip(CircleShape)
                 .border(2.dp, RosePrimary, CircleShape)
         )
-    } else {
-        val bitmap = remember(base64) {
-            if (!base64.isNullOrEmpty()) {
-                try {
-                    val rawBase64 = if (isDataUri) base64.substringAfter(",") else base64
-                    val decoded = Base64.decode(rawBase64, Base64.DEFAULT)
-                    BitmapFactory.decodeByteArray(decoded, 0, decoded.size)
-                } catch (e: Exception) {
-                    null
+    } else if (!base64.isNullOrBlank() && (base64.startsWith("http://") || base64.startsWith("https://") || base64.startsWith("content://") || base64.startsWith("file://"))) {
+        coil.compose.SubcomposeAsyncImage(
+            model = base64,
+            contentDescription = "Profil Fotoğrafı",
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+                .size(size)
+                .clip(CircleShape)
+                .border(2.dp, RosePrimary, CircleShape),
+            loading = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(selectedPreset.bgColor1, selectedPreset.bgColor2)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val emojiSize = (size.value * 0.45f).sp
+                    Text(text = selectedPreset.emoji, fontSize = emojiSize)
                 }
-            } else null
-        }
-
-        if (bitmap != null) {
-            androidx.compose.foundation.Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Profil Fotoğrafı",
-                contentScale = ContentScale.Crop,
-                modifier = modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .border(2.dp, RosePrimary, CircleShape)
-            )
-        } else {
-            val selectedPreset = AVATAR_PRESETS.firstOrNull { it.id == preset } ?: AVATAR_PRESETS.first()
-            Box(
-                modifier = modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(selectedPreset.bgColor1, selectedPreset.bgColor2)
-                        )
-                    )
-                    .border(2.dp, Color.White, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                val emojiSize = (size.value * 0.48f).sp
-                Text(
-                    text = selectedPreset.emoji,
-                    fontSize = emojiSize
-                )
+            },
+            error = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(selectedPreset.bgColor1, selectedPreset.bgColor2)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val emojiSize = (size.value * 0.45f).sp
+                    Text(text = selectedPreset.emoji, fontSize = emojiSize)
+                }
             }
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(selectedPreset.bgColor1, selectedPreset.bgColor2)
+                    )
+                )
+                .border(2.dp, Color.White, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            val emojiSize = (size.value * 0.48f).sp
+            Text(
+                text = selectedPreset.emoji,
+                fontSize = emojiSize
+            )
         }
     }
 }

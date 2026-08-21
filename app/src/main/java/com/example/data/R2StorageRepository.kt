@@ -30,13 +30,40 @@ class R2StorageRepository(private val context: Context) {
     private val client = OkHttpClient()
 
     /**
+     * Compress an image from Uri directly into base64 data string.
+     */
+    fun compressUriToBase64(
+        uri: Uri,
+        maxWidth: Int = 600,
+        maxHeight: Int = 600,
+        quality: Int = 80
+    ): String? {
+        return try {
+            val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+            val originalBitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream?.close() ?: return null
+
+            if (originalBitmap == null) return null
+
+            val scaledBitmap = scaleBitmap(originalBitmap, maxWidth, maxHeight)
+            val outputStream = ByteArrayOutputStream()
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+            val imageBytes = outputStream.toByteArray()
+            "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error converting Uri to base64", e)
+            null
+        }
+    }
+
+    /**
      * Upload an image to Cloudflare R2 or return Base64 fallback if R2 is not configured yet.
      */
     suspend fun uploadImageUri(
         uri: Uri,
         folder: String = "photos",
-        maxWidth: Int = 1080,
-        maxHeight: Int = 1080
+        maxWidth: Int = 800,
+        maxHeight: Int = 800
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
@@ -50,20 +77,81 @@ class R2StorageRepository(private val context: Context) {
             // Scale down for mobile efficiency
             val scaledBitmap = scaleBitmap(originalBitmap, maxWidth, maxHeight)
             val outputStream = ByteArrayOutputStream()
-            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 82, outputStream)
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
             val imageBytes = outputStream.toByteArray()
+
+            val base64Fallback = "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
 
             if (R2Config.isConfigured) {
                 val objectKey = "$folder/${UUID.randomUUID()}.jpg"
-                uploadToR2(imageBytes, objectKey, "image/jpeg")
+                val r2Res = uploadToR2(imageBytes, objectKey, "image/jpeg")
+                if (r2Res.isSuccess) {
+                    r2Res
+                } else {
+                    Log.w(TAG, "R2 upload failed, falling back to base64: ${r2Res.exceptionOrNull()?.message}")
+                    Result.success(base64Fallback)
+                }
             } else {
                 // If R2 credentials are not yet entered, use clean base64 data url as seamless local fallback
-                val base64 = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
-                Result.success("data:image/jpeg;base64,$base64")
+                Result.success(base64Fallback)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Image upload failed", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Generate standard AWS S3 SigV4 Pre-signed GET URL for Cloudflare R2.
+     * This allows any client (Coil, browser) to download the private R2 object without 403 Forbidden.
+     */
+    fun generatePresignedGetUrl(objectKey: String, expiresInSeconds: Long = 604800L): String {
+        return try {
+            val region = "auto"
+            val service = "s3"
+            val host = "${R2Config.accountId}.r2.cloudflarestorage.com"
+            val canonicalUri = "/${R2Config.bucketName}/$objectKey"
+
+            val dateFormat = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val dateStampFormat = SimpleDateFormat("yyyyMMdd", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+
+            val now = Date()
+            val amzDate = dateFormat.format(now)
+            val dateStamp = dateStampFormat.format(now)
+            val credentialScope = "$dateStamp/$region/$service/aws4_request"
+            val credential = "${R2Config.accessKeyId}/$credentialScope"
+            val encodedCredential = java.net.URLEncoder.encode(credential, "UTF-8")
+
+            val canonicalQuery = "X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+                "&X-Amz-Credential=$encodedCredential" +
+                "&X-Amz-Date=$amzDate" +
+                "&X-Amz-Expires=$expiresInSeconds" +
+                "&X-Amz-SignedHeaders=host"
+
+            val canonicalHeaders = "host:$host\n"
+            val signedHeaders = "host"
+            val payloadHash = "UNSIGNED-PAYLOAD"
+
+            val canonicalRequest = "GET\n$canonicalUri\n$canonicalQuery\n$canonicalHeaders\n$signedHeaders\n$payloadHash"
+            val algorithm = "AWS4-HMAC-SHA256"
+            val stringToSign = "$algorithm\n$amzDate\n$credentialScope\n${sha256Hex(canonicalRequest.toByteArray(Charsets.UTF_8))}"
+
+            val signingKey = getSignatureKey(R2Config.secretAccessKey, dateStamp, region, service)
+            val signature = hmacSha256Hex(signingKey, stringToSign)
+
+            "https://$host$canonicalUri?$canonicalQuery&X-Amz-Signature=$signature"
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating presigned GET url", e)
+            if (R2Config.publicDomain.isNotBlank()) {
+                val base = R2Config.publicDomain.trimEnd('/')
+                "$base/$objectKey"
+            } else {
+                "https://${R2Config.accountId}.r2.cloudflarestorage.com/${R2Config.bucketName}/$objectKey"
+            }
         }
     }
 
@@ -123,13 +211,8 @@ class R2StorageRepository(private val context: Context) {
 
             val response = client.newCall(request).execute()
             if (response.isSuccessful) {
-                val publicUrl = if (R2Config.publicDomain.isNotBlank()) {
-                    val base = R2Config.publicDomain.trimEnd('/')
-                    "$base/$objectKey"
-                } else {
-                    endpoint
-                }
-                Result.success(publicUrl)
+                val presignedUrl = generatePresignedGetUrl(objectKey)
+                Result.success(presignedUrl)
             } else {
                 val errBody = response.body?.string() ?: ""
                 Log.e(TAG, "R2 Upload error HTTP ${response.code}: $errBody")
