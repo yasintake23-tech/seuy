@@ -18,7 +18,10 @@ object NotificationHelper {
     private const val TAG = "NotificationHelper"
     const val CHANNEL_ID = "ikimiz_chat_notifications"
     const val CHANNEL_NAME = "İkimiz Aşk ve Sohbet Bildirimleri"
+    const val SERVICE_CHANNEL_ID = "ikimiz_background_service"
+    const val SERVICE_CHANNEL_NAME = "İkimiz Arka Plan Bağlantı Servisi"
     const val NOTIFICATION_ID_BASE = 1001
+    const val SERVICE_NOTIFICATION_ID = 2001
 
     fun areNotificationsEnabled(context: Context): Boolean {
         val notificationManager = NotificationManagerCompat.from(context)
@@ -64,7 +67,7 @@ object NotificationHelper {
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            val channel = NotificationChannel(
+            val chatChannel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH
@@ -74,8 +77,21 @@ object NotificationHelper {
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 200, 100, 200)
             }
+
+            val serviceChannel = NotificationChannel(
+                SERVICE_CHANNEL_ID,
+                SERVICE_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Sevgilinizden arka planda anlık mesaj alabilmek için çalışan servis"
+                setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+            }
+
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-            manager?.createNotificationChannel(channel)
+            manager?.createNotificationChannel(chatChannel)
+            manager?.createNotificationChannel(serviceChannel)
         }
     }
 

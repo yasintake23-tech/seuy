@@ -18,6 +18,7 @@ import com.example.model.PairingResult
 import com.example.model.PartnerStatus
 import com.example.model.SecretLoveNote
 import com.example.model.UserProfile
+import com.example.service.CoupleMessageForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -310,6 +311,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val coupleId = coupleRepository.getCoupleDocId(uid1, uid2)
         _isDataLoading.value = true
 
+        // Start background synchronization service to ensure real-time notifications even when app is closed/minimized
+        try {
+            CoupleMessageForegroundService.start(getApplication(), uid1, uid2)
+        } catch (e: Exception) {
+            android.util.Log.w("MainViewModel", "Could not start CoupleMessageForegroundService: ${e.message}")
+        }
+
         liveDataJob = viewModelScope.launch {
             // 1. Live Chat Messages (Firestore + Realtime DB)
             launch {
@@ -457,6 +465,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isPairingInProgress.value = false
 
             result.onSuccess {
+                CoupleMessageForegroundService.stop(getApplication())
                 partnerJob?.cancel()
                 liveDataJob?.cancel()
                 _partnerUser.value = null
@@ -881,6 +890,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun signOut() {
+        CoupleMessageForegroundService.stop(getApplication())
         currentUserJob?.cancel()
         partnerJob?.cancel()
         liveDataJob?.cancel()

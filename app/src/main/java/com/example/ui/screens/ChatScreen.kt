@@ -105,6 +105,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.material3.CircularProgressIndicator
 import coil.compose.AsyncImage
@@ -556,7 +562,7 @@ fun ChatScreen(
             }
         }
 
-        // Selected Photo Preview Banner
+        // Selected Photo Preview Banner with Quick Send button
         androidx.compose.animation.AnimatedVisibility(
             visible = selectedImageUri != null,
             enter = slideInVertically { it } + fadeIn(),
@@ -568,14 +574,14 @@ fun ChatScreen(
                         .fillMaxWidth()
                         .background(WarmCreamSurface)
                         .border(1.dp, BorderSoft)
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AsyncImage(
                         model = uri,
                         contentDescription = "Seçilen Fotoğraf",
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(48.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .border(1.5.dp, SoftCoralPrimary, RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.Crop
@@ -583,17 +589,48 @@ fun ChatScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "📸 Fotoğraf Eklendi",
+                            text = "📸 Fotoğraf Seçildi",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = SoftCoralDark
                         )
                         Text(
-                            text = "Gönder butonuna basarak sevgiline iletebilirsin",
+                            text = "Metin yazmadan doğrudan gönderebilirsin",
                             fontSize = 11.sp,
                             color = SlateNavy
                         )
                     }
+                    Button(
+                        onClick = {
+                            val img = selectedImageUri
+                            val txt = inputText.trim()
+                            typingDebounceJob?.cancel()
+                            onTypingChanged(false)
+                            onSendMessage(txt, img, replyingToMessage)
+                            inputText = ""
+                            selectedImageUri = null
+                            replyingToMessage = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoftCoralPrimary),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Gönder",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
                     IconButton(
                         onClick = { selectedImageUri = null },
                         modifier = Modifier.size(28.dp)
@@ -672,9 +709,31 @@ fun ChatScreen(
                             }
                         }
                     },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            if (inputText.isNotBlank() || selectedImageUri != null) {
+                                typingDebounceJob?.cancel()
+                                onTypingChanged(false)
+                                if (editingMessage != null) {
+                                    onEditMessage(editingMessage!!.id, inputText.trim())
+                                    editingMessage = null
+                                } else {
+                                    onSendMessage(inputText.trim(), selectedImageUri, replyingToMessage)
+                                    replyingToMessage = null
+                                }
+                                inputText = ""
+                                selectedImageUri = null
+                            }
+                        }
+                    ),
                     placeholder = {
                         Text(
-                            text = if (editingMessage != null) "Düzenlenmiş mesajı yaz..." else "Sevgiline tatlı bir mesaj yaz...",
+                            text = when {
+                                selectedImageUri != null -> "İsteğe bağlı bir not yaz (veya doğrudan Gönder'e bas)..."
+                                editingMessage != null -> "Düzenlenmiş mesajı yaz..."
+                                else -> "Sevgiline tatlı bir mesaj yaz..."
+                            },
                             fontSize = 13.sp,
                             color = SlateNavy.copy(alpha = 0.6f)
                         )

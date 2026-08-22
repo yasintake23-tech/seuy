@@ -78,6 +78,7 @@ import com.example.ui.theme.RosePrimary
 import com.example.ui.theme.RoseSoft
 import com.example.ui.theme.SageGreen
 import com.example.ui.theme.WineTertiary
+import com.example.util.BatteryOptimizationHelper
 import com.example.util.NotificationHelper
 
 @Composable
@@ -427,6 +428,41 @@ fun SettingsDialog(
                                     Text("Sistem Ayarları", fontSize = 11.5.sp, color = WineTertiary, fontWeight = FontWeight.SemiBold)
                                 }
                             }
+                        }
+
+                        // Background Service & Battery Optimization Card
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = BorderLight.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "⚡ Arka Planda Kesintisiz Çalışma",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WineTertiary
+                                )
+                                Text(
+                                    text = "Uygulama kapalıyken veya arka plandayken mesajları anında almak için pil kısıtlamasını kaldırın.",
+                                    fontSize = 11.sp,
+                                    color = WineTertiary.copy(alpha = 0.7f),
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Pil Kısıtlamasını Kaldır / İzin Ver", fontSize = 11.5.sp, color = RoseDark, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

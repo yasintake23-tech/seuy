@@ -58,10 +58,24 @@ class ChatRepository(private val context: Context) {
         }
 
         val inMemoryMap = mutableMapOf<String, ChatMessage>()
+        val deletedIdsSet = mutableSetOf<String>()
 
         fun emitSortedList() {
-            val sortedList = inMemoryMap.values.sortedBy { it.timestamp }
-            trySend(sortedList)
+            val list = inMemoryMap.values.map { msg ->
+                if (deletedIdsSet.contains(msg.id) || msg.isDeleted) {
+                    msg.copy(
+                        isDeleted = true,
+                        text = "",
+                        mediaUrl = null,
+                        imageUrl = null,
+                        isPhoto = false,
+                        reactionEmoji = null
+                    )
+                } else {
+                    msg
+                }
+            }.sortedBy { it.timestamp }
+            trySend(list)
         }
 
         // 1. Primary Live Listener: Firebase Realtime Database (/chats/{coupleId}/messages)
@@ -100,6 +114,30 @@ class ChatRepository(private val context: Context) {
 
         rtdbRef?.addValueEventListener(rtdbListener)
 
+        // 1.1 Realtime Deleted IDs Listener (/chats/{coupleId}/deleted_ids)
+        val rtdbDeletedRef = try {
+            realtimeDb.reference.child("chats").child(coupleId).child("deleted_ids")
+        } catch (e: Exception) {
+            null
+        }
+
+        val rtdbDeletedListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (snapshot.exists()) {
+                    for (child in snapshot.children) {
+                        val key = child.key
+                        if (!key.isNullOrBlank()) {
+                            deletedIdsSet.add(key)
+                        }
+                    }
+                    emitSortedList()
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        rtdbDeletedRef?.addValueEventListener(rtdbDeletedListener)
+
         // 2. Secondary Synchronizer: Firestore Collection /couples/{coupleId}/messages
         val firestoreListener = firestore.collection("couples")
             .document(coupleId)
@@ -122,9 +160,22 @@ class ChatRepository(private val context: Context) {
                 emitSortedList()
             }
 
+        // 2.1 Secondary Deleted IDs from Firestore (/couples/{coupleId}/deleted_ids)
+        val firestoreDeletedListener = firestore.collection("couples")
+            .document(coupleId)
+            .collection("deleted_ids")
+            .addSnapshotListener { snapshot, _ ->
+                snapshot?.documents?.forEach { doc ->
+                    deletedIdsSet.add(doc.id)
+                }
+                emitSortedList()
+            }
+
         awaitClose {
             rtdbRef?.removeEventListener(rtdbListener)
+            rtdbDeletedRef?.removeEventListener(rtdbDeletedListener)
             firestoreListener.remove()
+            firestoreDeletedListener.remove()
         }
     }
 
@@ -268,25 +319,75 @@ class ChatRepository(private val context: Context) {
                 "deleted" to true,
                 "text" to "",
                 "messageText" to "",
-                "mediaUrl" to null,
-                "imageUrl" to null,
+                "isPhoto" to false,
+                "mediaUrl" to "",
+                "imageUrl" to "",
                 "reactionEmoji" to null
             )
 
-            realtimeDb.reference
-                .child("chats")
-                .child(coupleId)
-                .child("messages")
-                .child(messageId)
-                .updateChildren(updates)
-                .await()
+            // 1. Update RTDB message node
+            try {
+                realtimeDb.reference
+                    .child("chats")
+                    .child(coupleId)
+                    .child("messages")
+                    .child(messageId)
+                    .updateChildren(updates)
+                    .await()
+            } catch (e: Exception) {
+                Log.w(TAG, "RTDB delete message update error: ${e.message}")
+            }
 
-            firestore.collection("couples")
-                .document(coupleId)
-                .collection("messages")
-                .document(messageId)
-                .set(updates, SetOptions.merge())
-                .await()
+            // 2. Mark in RTDB deleted_ids
+            try {
+                realtimeDb.reference
+                    .child("chats")
+                    .child(coupleId)
+                    .child("deleted_ids")
+                    .child(messageId)
+                    .setValue(true)
+                    .await()
+            } catch (e: Exception) {
+                Log.w(TAG, "RTDB deleted_ids write error: ${e.message}")
+            }
+
+            // 3. Update Firestore message
+            try {
+                firestore.collection("couples")
+                    .document(coupleId)
+                    .collection("messages")
+                    .document(messageId)
+                    .set(
+                        mapOf(
+                            "isDeleted" to true,
+                            "deleted" to true,
+                            "text" to "",
+                            "messageText" to "",
+                            "isPhoto" to false,
+                            "reactionEmoji" to null
+                        ),
+                        SetOptions.merge()
+                    )
+                    .await()
+            } catch (e: Exception) {
+                Log.w(TAG, "Firestore delete message update error: ${e.message}")
+            }
+
+            // 4. Mark in Firestore deleted_ids
+            try {
+                firestore.collection("couples")
+                    .document(coupleId)
+                    .collection("deleted_ids")
+                    .document(messageId)
+                    .set(
+                        mapOf(
+                            "deletedAt" to System.currentTimeMillis()
+                        )
+                    )
+                    .await()
+            } catch (e: Exception) {
+                Log.w(TAG, "Firestore deleted_ids write error: ${e.message}")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error deleting chat message", e)
         }
