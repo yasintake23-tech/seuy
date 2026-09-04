@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -10,541 +9,190 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AddTask
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VolunteerActivism
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.BottomNavTab
 import com.example.model.BucketItem
 import com.example.model.UserProfile
 import com.example.ui.components.AvatarImage
-import com.example.ui.theme.BorderSoft
-import com.example.ui.theme.DeepCharcoal
-import com.example.ui.theme.SageGreen
-import com.example.ui.theme.SlateNavy
-import com.example.ui.theme.SoftCoralContainer
-import com.example.ui.theme.SoftCoralDark
-import com.example.ui.theme.SoftCoralPrimary
-import com.example.ui.theme.TextMuted
-import com.example.ui.theme.WarmCreamBackground
-import com.example.ui.theme.WarmCreamContainer
-import com.example.ui.theme.WarmCreamSurface
-import com.example.ui.theme.WarmGold
-import kotlinx.coroutines.delay
-import java.util.Calendar
-import java.util.concurrent.TimeUnit
+import com.example.ui.theme.*
 
 @Composable
 fun PairedHomeScreen(
     currentUser: UserProfile,
     partnerUser: UserProfile?,
-    bucketList: List<BucketItem> = emptyList(),
+    bucketList: List<BucketItem>,
     onOpenSettings: () -> Unit,
-    onNavigateToTab: ((com.example.model.BottomNavTab) -> Unit)? = null,
+    onNavigateToTab: ((BottomNavTab) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var sentHeartsCount by remember { mutableIntStateOf(0) }
-    var showHeartBurst by remember { mutableStateOf(false) }
-
-    // Live clock ticker
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(1000)
-            currentTime = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000)
+            now = System.currentTimeMillis()
         }
     }
-
-    val pairedTime = currentUser.pairedAt ?: currentTime
-    val diff = (currentTime - pairedTime).coerceAtLeast(0)
-
-    val days = TimeUnit.MILLISECONDS.toDays(diff)
-    val hours = TimeUnit.MILLISECONDS.toHours(diff) % 24
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(diff) % 60
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(diff) % 60
-
-    val partnerDisplayName = partnerUser?.displayName ?: currentUser.partnerName ?: "Sevgilin"
-
-    // Infinite heartbeat animation
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "heart_pulse"
+    val pairedAt = currentUser.pairedAt ?: now
+    val days = java.util.concurrent.TimeUnit.MILLISECONDS.toDays((now - pairedAt).coerceAtLeast(0))
+    val openGoals = bucketList.count { !it.isCompleted }
+    val doneGoals = bucketList.count { it.isCompleted }
+    val partnerName = partnerUser?.displayName ?: currentUser.partnerName ?: "Sevgilin"
+    val pulse by rememberInfiniteTransition(label = "home_pulse").animateFloat(
+        1f, 1.08f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse"
     )
 
-    val nextMilestoneDays = remember(days) {
-        val daysToNext30 = (30 - (days % 30)).coerceAtLeast(1)
-        daysToNext30
-    }
-    val nextMilestoneMonth = remember(days) {
-        (days / 30) + 1
-    }
-    val nextBucketGoal = remember(bucketList) {
-        bucketList.firstOrNull { !it.isCompleted }
-    }
-
-    val dailyLoveQuotes = remember {
-        listOf(
-            "\"Seninle geçen her gün, kalbime yazılan en güzel şiirdir.\" 💖",
-            "\"Gözlerinin içine baktığım her an dünyam güzelleşiyor.\" ✨",
-            "\"Mesafeler ne olursa olsun kalbim hep senin yanında atıyor.\" 🌸",
-            "\"Birlikte kurduğumuz hayaller, hayatımın en tatlı gerçeği.\" 💫",
-            "\"Gülüşün, en yorgun anlarımda bile içimi aydınlatan güneşim.\" ☀️",
-            "\"İki kalp bir olunca her an unutulmaz bir masala dönüşür.\" 🌹",
-            "\"Seni sevmek, hayatın bana sunduğu en güzel mucize.\" 💌"
-        )
-    }
-    val dayOfYear = remember { Calendar.getInstance().get(Calendar.DAY_OF_YEAR) }
-    val todayQuote = remember(dayOfYear) { dailyLoveQuotes[dayOfYear % dailyLoveQuotes.size] }
-
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(WarmCreamBackground)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier = modifier.fillMaxSize().background(WarmCreamBackground).padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp)
     ) {
-        // App Top Bar
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(SoftCoralContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Favorite,
-                            contentDescription = null,
-                            tint = SoftCoralPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "İkimiz",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = DeepCharcoal
-                    )
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Column {
+                    Text("Biz", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = DeepCharcoal)
+                    Text("İkinizin gerçekten kullanacağı alan.", fontSize = 12.sp, color = SlateNavy)
                 }
-
-                IconButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.testTag("open_settings_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Ayarlar",
-                        tint = DeepCharcoal,
-                        modifier = Modifier.size(24.dp)
-                    )
+                IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings_btn")) {
+                    Icon(Icons.Default.Settings, "Ayarlar", tint = DeepCharcoal)
                 }
             }
         }
 
-        // 1. Connected Lovers Hero Card
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = WarmCreamSurface),
                 shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, BorderSoft, RoundedCornerShape(24.dp))
+                modifier = Modifier.fillMaxWidth().border(1.dp, BorderSoft, RoundedCornerShape(24.dp))
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Dual Avatars & Romantic Heart Bridge
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // User 1 (Me)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            AvatarImage(
-                                preset = currentUser.avatarPreset,
-                                base64 = currentUser.avatarBase64,
-                                size = 70.dp
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = currentUser.displayName,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DeepCharcoal
-                            )
-                            Text(
-                                text = "Sen",
-                                fontSize = 11.sp,
-                                color = SlateNavy
-                            )
-                        }
-
-                        // Pulse Glowing Heart Bridge
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 14.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .scale(pulseScale)
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(SoftCoralPrimary, SoftCoralDark)
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = "Aşk Bağı",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = "💖", fontSize = 12.sp)
-                        }
-
-                        // User 2 (Partner)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            AvatarImage(
-                                preset = partnerUser?.avatarPreset ?: "flower_pink",
-                                base64 = partnerUser?.avatarBase64,
-                                size = 70.dp
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = partnerDisplayName,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DeepCharcoal
-                            )
-                            Text(
-                                text = "Sevgilin",
-                                fontSize = 11.sp,
-                                color = SlateNavy
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Live Elapsed Time Badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(SoftCoralContainer)
-                            .border(1.dp, BorderSoft, RoundedCornerShape(16.dp))
-                            .padding(horizontal = 18.dp, vertical = 12.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "${days + 1}. Günümüz",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = SoftCoralDark
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "$days gün • $hours saat • $minutes dk • $seconds sn",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = DeepCharcoal
-                            )
-                            Text(
-                                text = "Birlikte Aşkla Geçen Her An",
-                                fontSize = 10.sp,
-                                color = SlateNavy
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2. Interactive "Seni Düşünüyorum / Kalp Gönder" Button
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = WarmCreamSurface),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, BorderSoft, RoundedCornerShape(20.dp))
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Sevgiline Sevgi Dokunuşu Gönder 💌",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DeepCharcoal
-                    )
-                    Text(
-                        text = "Bir dokunuşla sevgiline kalbini hissettir",
-                        fontSize = 11.sp,
-                        color = SlateNavy
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = {
-                            sentHeartsCount++
-                            showHeartBurst = true
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = SoftCoralPrimary,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .height(48.dp)
-                            .testTag("send_love_touch_btn")
-                    ) {
-                        Icon(Icons.Default.VolunteerActivism, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Seni Düşünüyorum (Kalp Gönder 💖)",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
-
-                    if (sentHeartsCount > 0) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "✨ Bugün sevgiline $sentHeartsCount kalp gönderdin!",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = SoftCoralDark
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3. Special Day Countdown & Milestones Card
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = WarmCreamSurface),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, BorderSoft, RoundedCornerShape(20.dp))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Özel Günler & Ortak Planlar 🎂",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = DeepCharcoal
-                        )
-                        Icon(
-                            imageVector = Icons.Default.CalendarMonth,
-                            contentDescription = null,
-                            tint = SoftCoralPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Anniversary Countdown
+                Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(Modifier.fillMaxWidth(), Arrangement.Center, Alignment.CenterVertically) {
+                        AvatarImage(currentUser.avatarPreset, currentUser.displayPhotoUrl, 68.dp)
                         Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(WarmCreamContainer)
-                                .border(1.dp, BorderSoft, RoundedCornerShape(14.dp))
-                                .padding(12.dp)
-                        ) {
-                            Column {
-                                Text(
-                                    text = if (days < 365) "$nextMilestoneMonth. Ay Dönümümüz" else "Yıldönümümüz",
-                                    fontSize = 12.sp,
-                                    color = SlateNavy
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = if (days < 365) "$nextMilestoneDays Gün Kaldı" else "${365 - (days % 365)} Gün Kaldı",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = DeepCharcoal
-                                )
-                                Text(
-                                    text = "🎉 Özel kutlama",
-                                    fontSize = 10.sp,
-                                    color = SoftCoralPrimary
-                                )
-                            }
-                        }
-
-                        // Next Date Night / Bucket Goal
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(SoftCoralContainer)
-                                .border(1.dp, BorderSoft, RoundedCornerShape(14.dp))
-                                .clickable {
-                                    onNavigateToTab?.invoke(com.example.model.BottomNavTab.GAMES)
-                                }
-                                .padding(12.dp)
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Sıradaki Planımız",
-                                    fontSize = 12.sp,
-                                    color = SlateNavy
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                if (nextBucketGoal != null) {
-                                    Text(
-                                        text = nextBucketGoal.title,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = SoftCoralDark,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = "🎯 ${nextBucketGoal.category}",
-                                        fontSize = 10.sp,
-                                        color = DeepCharcoal
-                                    )
-                                } else {
-                                    Text(
-                                        text = "Plan Belirle",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = SoftCoralDark
-                                    )
-                                    Text(
-                                        text = "✨ Hedef eklemek için dokun",
-                                        fontSize = 10.sp,
-                                        color = DeepCharcoal
-                                    )
-                                }
-                            }
-                        }
+                            Modifier.padding(horizontal = 14.dp).size(42.dp).scale(pulse).background(
+                                Brush.linearGradient(listOf(SoftCoralPrimary, SoftCoralDark)), CircleShape
+                            ),
+                            Alignment.Center
+                        ) { Icon(Icons.Default.Favorite, null, tint = Color.White) }
+                        AvatarImage(partnerUser?.avatarPreset ?: "heart_rose", partnerUser?.displayPhotoUrl, 68.dp)
                     }
+                    Spacer(Modifier.height(12.dp))
+                    Text("$days gündür birlikte", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = SoftCoralDark)
+                    Text("${currentUser.displayName} & $partnerName", fontSize = 13.sp, color = SlateNavy)
                 }
             }
         }
 
-        // 4. Daily Love Affirmation & Quote
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = WarmCreamContainer.copy(alpha = 0.7f)),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, BorderSoft, RoundedCornerShape(18.dp))
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "✨", fontSize = 26.sp)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Günün Romantik Sözü",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = SoftCoralDark
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = todayQuote,
-                            fontSize = 12.sp,
-                            color = DeepCharcoal,
-                            lineHeight = 16.sp
-                        )
+            SectionTitle("Bugün ne yapmak istiyorsunuz?", "Hızlı erişim")
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ActionTile("Mesajlaş", Icons.Default.Chat, Modifier.weight(1f)) { onNavigateToTab?.invoke(BottomNavTab.CHAT) }
+                ActionTile("Oyun oyna", Icons.Default.SportsEsports, Modifier.weight(1f)) { onNavigateToTab?.invoke(BottomNavTab.GAMES) }
+                ActionTile("Anılara bak", Icons.Default.PhotoLibrary, Modifier.weight(1f)) { onNavigateToTab?.invoke(BottomNavTab.PROFILE) }
+            }
+        }
+
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = SoftCoralContainer), shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp)) {
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Ortak hedefler", fontWeight = FontWeight.Bold, color = SoftCoralDark)
+                            Text("$openGoals açık • $doneGoals tamamlandı", fontSize = 12.sp, color = DeepCharcoal)
+                        }
+                        Icon(Icons.Default.AddTask, null, tint = SoftCoralPrimary)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    val next = bucketList.firstOrNull { !it.isCompleted }
+                    Text(next?.let { "Sıradaki: ${it.title}" } ?: "Henüz açık hedef yok. Eğlence bölümünden ilk hedefinizi ekleyin.",
+                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = DeepCharcoal,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (next != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { onNavigateToTab?.invoke(BottomNavTab.GAMES) }, shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = SoftCoralPrimary)) { Text("Hedeflere git") }
                     }
                 }
             }
         }
 
-        item { Spacer(modifier = Modifier.height(50.dp)) }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = WarmCreamSurface), shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().border(1.dp, BorderSoft, RoundedCornerShape(20.dp))) {
+                Column(Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.CalendarMonth, null, tint = SoftCoralPrimary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("İlişki özeti", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = DeepCharcoal)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceEvenly) {
+                        Stat("💖", "$days", "Gün")
+                        Stat("🎯", "$doneGoals", "Hedef")
+                        Stat("✨", "$openGoals", "Plan")
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = WarmCreamSurface), shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onNavigateToTab?.invoke(BottomNavTab.CHAT) }) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Forum, null, tint = SoftCoralPrimary)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Birbirinize bir şey bırakın", fontWeight = FontWeight.Bold, color = DeepCharcoal)
+                        Text("Mesajlar bölümünden fotoğraf, ses veya düşüncenizi paylaşın.", fontSize = 12.sp, color = SlateNavy)
+                    }
+                    Text("→", fontSize = 22.sp, color = SoftCoralPrimary)
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun SectionTitle(title: String, subtitle: String) {
+    Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = DeepCharcoal)
+    Text(subtitle, fontSize = 11.sp, color = SlateNavy)
+}
+@Composable private fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = modifier.height(92.dp), colors = CardDefaults.cardColors(containerColor = WarmCreamSurface),
+        shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxSize().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(icon, null, tint = SoftCoralPrimary, modifier = Modifier.size(25.dp))
+            Spacer(Modifier.height(7.dp)); Text(text, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DeepCharcoal)
+        }
+    }
+}
+@Composable private fun Stat(icon: String, value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(icon, fontSize = 19.sp); Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = DeepCharcoal)
+        Text(label, fontSize = 10.sp, color = SlateNavy)
     }
 }

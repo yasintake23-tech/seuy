@@ -20,3 +20,13 @@ View your app in AI Studio: https://ai.studio/apps/960b98fa-3ce9-4314-8397-1ec3f
 5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
 6. Run the app on an emulator or physical device
 7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
+
+
+## HeartBond V2 – Relationship Space refresh
+
+- Biz ana ekranı sadeleştirildi; yalnızca gerçek uygulama akışlarına yönlendiren içerikler bırakıldı.
+- Eğlence bölümü üç gerçek sekmeye ayrıldı: Oyunlar, Planlarımız, Sorular.
+- Oyunlar: Bu mu Şu mu, Doğruluk/Cesaret ve yerel kalp sayacı.
+- Profil & Anılar yeniden tasarlandı; gerçek profil verileri, partner bilgisi, anı sayıları, fotoğraf ekleme ve anı detayları öne çıkarıldı.
+- Harita ekranına dokunulmadı.
+- Mesajlaşma ve mevcut veri/repository akışları korunmuştur.

@@ -20,6 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,8 +47,15 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     setContent {
-      MyApplicationTheme {
-        MainApp(intent = intent)
+      var themeMode by remember { mutableStateOf(getSharedPreferences("ikimiz_settings", MODE_PRIVATE).getString("theme_mode", "system") ?: "system") }
+      MyApplicationTheme(
+        darkTheme = when (themeMode) {
+          "dark" -> true
+          "light" -> false
+          else -> androidx.compose.foundation.isSystemInDarkTheme()
+        }
+      ) {
+        MainApp(intent = intent, onThemeModeChanged = { themeMode = it })
       }
     }
   }
@@ -61,8 +71,11 @@ class MainActivity : ComponentActivity() {
 fun MainApp(
   intent: Intent? = null,
   modifier: Modifier = Modifier,
-  viewModel: MainViewModel = viewModel()
+  viewModel: MainViewModel = viewModel(),
+  onThemeModeChanged: (String) -> Unit = {}
 ) {
+  val context = LocalContext.current
+
   val currentUser by viewModel.currentUser.collectAsState()
   val partnerUser by viewModel.partnerUser.collectAsState()
   val isSignUpMode by viewModel.isSignUpMode.collectAsState()
@@ -88,8 +101,6 @@ fun MainApp(
   val isPartnerTyping by viewModel.isPartnerTyping.collectAsState()
   val coupleMemories by viewModel.coupleMemories.collectAsState()
   val doubleTapEmoji by viewModel.doubleTapEmoji.collectAsState()
-
-  val context = LocalContext.current
 
   // Request Notification permission for Android 13+ (POST_NOTIFICATIONS)
   val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -263,7 +274,8 @@ fun MainApp(
       onChangeAvatarPreset = { viewModel.updateProfilePreset(it) },
       onDismiss = { viewModel.closeSettings() },
       onOpenUnpairConfirm = { viewModel.openUnpairConfirm() },
-      onSignOut = { viewModel.signOut() }
+      onSignOut = { viewModel.signOut() },
+      onThemeModeChanged = onThemeModeChanged
     )
   }
 
