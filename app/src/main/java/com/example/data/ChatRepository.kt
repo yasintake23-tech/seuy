@@ -64,7 +64,7 @@ class ChatRepository(private val context: Context) {
             .document(coupleId)
             .collection("messages")
             .orderBy("timestamp", Query.Direction.ASCENDING)
-            .limitToLast(limit.coerceIn(10, 100))
+            .limitToLast(limit.coerceIn(10, 100).toLong())
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w(tag, "Recent message listener error: ${error.message}")
@@ -93,7 +93,7 @@ class ChatRepository(private val context: Context) {
             .collection("messages")
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .startAfter(beforeTimestamp)
-            .limit(limit.coerceIn(10, 60))
+            .limit(limit.coerceIn(10, 60).toLong())
             .get()
             .await()
 

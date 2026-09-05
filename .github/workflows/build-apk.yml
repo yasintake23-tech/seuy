@@ -28,12 +28,27 @@ jobs:
           cache: gradle
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+          accept-android-sdk-licenses: 'true'
+          log-accepted-android-sdk-licenses: 'false'
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
 
       - name: Install Android SDK components
+        shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          set -euo pipefail
           sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
 
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v6
