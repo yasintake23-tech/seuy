@@ -35,9 +35,9 @@ jobs:
 
       - name: Install Android SDK components
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
-          sdkmanager --list_installed | grep -E 'platforms;android-36|build-tools;36.0.0' || true
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+          sdkmanager --list_installed | grep -E 'platforms;android-36|build-tools;35.0.0'
 
       - name: Validate Gradle Wrapper
         run: |
@@ -47,7 +47,7 @@ jobs:
           ./gradlew --version
 
       - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace --warning-mode all
+        run: ./gradlew :app:assembleDebug --no-daemon --no-configuration-cache --stacktrace --warning-mode all
 
       - name: Verify APK
         run: |
