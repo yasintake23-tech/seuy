@@ -36,6 +36,7 @@ import com.example.ui.screens.PairedHomeScreen
 import com.example.ui.screens.PairingScreen
 import com.example.ui.screens.ProfileGalleryScreen
 import com.example.ui.screens.SettingsDialog
+import com.example.ui.screens.UnpairConfirmationDialog
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.WarmCreamBackground
 import com.example.ui.viewmodel.MainViewModel

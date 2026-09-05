@@ -112,7 +112,13 @@ fun GamesScreen(
             GameCard("Kalp sayacı", "Kendi aranızda günlük mini hedef belirleyin.", "❤️") {
                 var count by remember { mutableIntStateOf(0) }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("$count", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, color = SoftCoralDark, Modifier.weight(1f))
+                    Text(
+                        text = "$count",
+                        modifier = Modifier.weight(1f),
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = SoftCoralDark
+                    )
                     FilledIconButton(onClick = { count++ }) { Icon(Icons.Default.Favorite, null) }
                 }
                 Text("Bu sayaç cihazda tutulur; sonraki sürümde ortak sayaç olarak Firebase'e bağlanabilir.", fontSize = 10.sp, color = TextMuted)
