@@ -30,3 +30,7 @@ View your app in AI Studio: https://ai.studio/apps/960b98fa-3ce9-4314-8397-1ec3f
 - Profil & Anılar yeniden tasarlandı; gerçek profil verileri, partner bilgisi, anı sayıları, fotoğraf ekleme ve anı detayları öne çıkarıldı.
 - Harita ekranına dokunulmadı.
 - Mesajlaşma ve mevcut veri/repository akışları korunmuştur.
+
+
+## Build configuration note
+This revision uses AGP 9.1 built-in Kotlin. The legacy `android.kotlinOptions` DSL is intentionally removed; Java 17 compile options drive the Kotlin JVM target.
