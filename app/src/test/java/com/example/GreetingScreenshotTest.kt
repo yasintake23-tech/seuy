@@ -30,7 +30,6 @@ class GreetingScreenshotTest {
           errorMessage = null,
           onSignUp = { _, _, _, _, _, _, _ -> },
           onSignIn = { _, _ -> },
-          onGoogleSignIn = {},
           onToggleMode = {}
         )
       }
