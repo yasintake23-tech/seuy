@@ -21,7 +21,7 @@ View your app in AI Studio: https://ai.studio/apps/960b98fa-3ce9-4314-8397-1ec3f
 7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
 
 
-## HeartBond V2 – Relationship Space refresh
+## HeartBond V8 – Build-stable relationship space
 
 - Biz ana ekranı sadeleştirildi; yalnızca gerçek uygulama akışlarına yönlendiren içerikler bırakıldı.
 - Eğlence bölümü üç gerçek sekmeye ayrıldı: Oyunlar, Planlarımız, Sorular.
@@ -31,5 +31,7 @@ View your app in AI Studio: https://ai.studio/apps/960b98fa-3ce9-4314-8397-1ec3f
 - Mesajlaşma ve mevcut veri/repository akışları korunmuştur.
 
 
-## Build configuration note
-This revision uses AGP 9.1 built-in Kotlin. The legacy `android.kotlinOptions` DSL is intentionally removed; Java 17 compile options drive the Kotlin JVM target.
+## Build configuration
+This V8 revision is aligned with Android Gradle Plugin 9.1.1, Gradle 9.3.1, JDK 17, and compile/target SDK 36. AGP 9+ built-in Kotlin is used; the legacy `kotlin-android`, `kotlin-kapt`, and `android.kotlinOptions` configuration is not present. Java 17 compile options provide the JVM target.
+
+The GitHub Actions workflow installs the required Android 36 platform/build tools, makes `gradlew` executable, runs `:app:assembleDebug`, verifies the generated APK, and uploads it as an artifact.
