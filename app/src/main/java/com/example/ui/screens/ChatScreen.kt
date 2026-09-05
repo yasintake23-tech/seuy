@@ -85,6 +85,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -152,6 +153,9 @@ fun ChatScreen(
     onDeleteMessage: (String) -> Unit = {},
     onEditMessage: (String, String) -> Unit = { _, _ -> },
     onReactMessage: (String, String?) -> Unit = { _, _ -> },
+    onLoadOlderMessages: () -> Unit = {},
+    isLoadingOlderMessages: Boolean = false,
+    hasMoreOlderMessages: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -197,12 +201,42 @@ fun ChatScreen(
         onMarkAsRead()
     }
 
-    // Auto scroll to bottom and mark read on new message
+    // Initial open: jump to the newest message only once for this screen instance.
+    var didInitialScroll by remember { mutableStateOf(false) }
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+        if (!didInitialScroll && messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size - 1)
+            didInitialScroll = true
             onMarkAsRead()
         }
+    }
+
+    // Load older pages only when the user reaches the top. Keep the visible
+    // message anchored when a page is prepended so the chat does not jump.
+    var pendingOlderAnchor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var messageCountBeforeOlderLoad by remember { mutableStateOf(0) }
+
+    LaunchedEffect(messages.size, hasMoreOlderMessages, isLoadingOlderMessages) {
+        val anchor = pendingOlderAnchor
+        if (anchor != null && messageCountBeforeOlderLoad > 0 && messages.size > messageCountBeforeOlderLoad) {
+            val added = messages.size - messageCountBeforeOlderLoad
+            listState.scrollToItem(anchor.first + added, anchor.second)
+            pendingOlderAnchor = null
+            messageCountBeforeOlderLoad = messages.size
+        } else if (anchor != null && !isLoadingOlderMessages && !hasMoreOlderMessages) {
+            pendingOlderAnchor = null
+        }
+    }
+
+    LaunchedEffect(listState, hasMoreOlderMessages) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .collect { firstIndex ->
+                if (firstIndex <= 1 && hasMoreOlderMessages && !isLoadingOlderMessages && messages.isNotEmpty() && pendingOlderAnchor == null) {
+                    pendingOlderAnchor = firstIndex to listState.firstVisibleItemScrollOffset
+                    messageCountBeforeOlderLoad = messages.size
+                    onLoadOlderMessages()
+                }
+            }
     }
 
     Column(

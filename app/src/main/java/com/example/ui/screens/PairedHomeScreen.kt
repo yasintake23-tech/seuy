@@ -3,10 +3,12 @@ package com.example.ui.screens
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -45,6 +47,9 @@ fun PairedHomeScreen(
     currentUser: UserProfile,
     partnerUser: UserProfile?,
     bucketList: List<BucketItem>,
+    relationshipStartedAt: Long? = null,
+    heartWarCounts: Map<String, Long> = emptyMap(),
+    onHeartTap: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onNavigateToTab: ((BottomNavTab) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -56,8 +61,12 @@ fun PairedHomeScreen(
             now = System.currentTimeMillis()
         }
     }
-    val pairedAt = currentUser.pairedAt ?: now
-    val days = java.util.concurrent.TimeUnit.MILLISECONDS.toDays((now - pairedAt).coerceAtLeast(0))
+    val relationshipStart = relationshipStartedAt ?: currentUser.pairedAt ?: now
+    val elapsed = (now - relationshipStart).coerceAtLeast(0)
+    val days = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(elapsed)
+    val hours = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(elapsed) % 24
+    val minutes = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(elapsed) % 60
+    val seconds = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(elapsed) % 60
     val openGoals = bucketList.count { !it.isCompleted }
     val doneGoals = bucketList.count { it.isCompleted }
     val partnerName = partnerUser?.displayName ?: currentUser.partnerName ?: "Sevgilin"
@@ -100,10 +109,26 @@ fun PairedHomeScreen(
                         AvatarImage(partnerUser?.avatarPreset ?: "heart_rose", partnerUser?.displayPhotoUrl, 68.dp)
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text("$days gündür birlikte", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = SoftCoralDark)
+                    Text("$days gündür tanışıyoruz", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = SoftCoralDark)
+                    Text(
+                        "%02d:%02d:%02d:%02d".format(days, hours, minutes, seconds),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepCharcoal
+                    )
                     Text("${currentUser.displayName} & $partnerName", fontSize = 13.sp, color = SlateNavy)
                 }
             }
+        }
+
+        item {
+            HeartWarsCard(
+                myName = currentUser.displayName,
+                partnerName = partnerName,
+                myCount = heartWarCounts[currentUser.userId] ?: 0L,
+                partnerCount = partnerUser?.userId?.let { heartWarCounts[it] ?: 0L } ?: 0L,
+                onHeartTap = onHeartTap
+            )
         }
 
         item {
@@ -111,7 +136,6 @@ fun PairedHomeScreen(
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ActionTile("Mesajlaş", Icons.Default.Chat, Modifier.weight(1f)) { onNavigateToTab?.invoke(BottomNavTab.CHAT) }
-                ActionTile("Oyun oyna", Icons.Default.SportsEsports, Modifier.weight(1f)) { onNavigateToTab?.invoke(BottomNavTab.GAMES) }
                 ActionTile("Anılara bak", Icons.Default.PhotoLibrary, Modifier.weight(1f)) { onNavigateToTab?.invoke(BottomNavTab.PROFILE) }
             }
         }
@@ -194,5 +218,102 @@ fun PairedHomeScreen(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(icon, fontSize = 19.sp); Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = DeepCharcoal)
         Text(label, fontSize = 10.sp, color = SlateNavy)
+    }
+}
+
+@Composable
+private fun HeartWarsCard(
+    myName: String,
+    partnerName: String,
+    myCount: Long,
+    partnerCount: Long,
+    onHeartTap: () -> Unit
+) {
+    val maxCount = maxOf(20L, myCount, partnerCount).toFloat()
+    val myTarget = (myCount / maxCount).coerceIn(0f, 1f)
+    val partnerTarget = (partnerCount / maxCount).coerceIn(0f, 1f)
+    val myFill by animateFloatAsState(myTarget, animationSpec = spring(stiffness = 380f), label = "my_jar")
+    val partnerFill by animateFloatAsState(partnerTarget, animationSpec = spring(stiffness = 380f), label = "partner_jar")
+    var pressed by remember { mutableStateOf(false) }
+    LaunchedEffect(pressed) {
+        if (pressed) {
+            kotlinx.coroutines.delay(120)
+            pressed = false
+        }
+    }
+    val leaderText = when {
+        myCount == partnerCount -> "Berabere ❤️"
+        myCount > partnerCount -> "$myName önde 💗"
+        else -> "$partnerName önde 💗"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SoftCoralContainer),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Text("Kalp Savaşları ❤️", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = SoftCoralDark)
+            Text("Kavanozunu doldur, bak bakalım bugün kim önde.", fontSize = 11.sp, color = SlateNavy)
+            Text(leaderText, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SoftCoralDark)
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HeartJar(myName, myCount, myFill, Modifier.weight(1f))
+                HeartJar(partnerName, partnerCount, partnerFill, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    pressed = true
+                    onHeartTap()
+                },
+                modifier = Modifier.fillMaxWidth().scale(if (pressed) 0.97f else 1f),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = SoftCoralPrimary)
+            ) {
+                Icon(Icons.Default.Favorite, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Kalp at ❤️", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeartJar(
+    name: String,
+    count: Long,
+    fill: Float,
+    modifier: Modifier
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold, color = DeepCharcoal)
+        Spacer(Modifier.height(8.dp))
+        Box(modifier = Modifier.height(132.dp)) {
+            Canvas(Modifier.fillMaxSize()) {
+                val w = size.width * 0.62f
+                val left = (size.width - w) / 2f
+                val right = left + w
+                val top = 8.dp.toPx()
+                val bottom = size.height - 8.dp.toPx()
+                drawRoundRect(
+                    brush = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.8f), Color.White.copy(alpha = 0.25f))),
+                    topLeft = androidx.compose.ui.geometry.Offset(left, top),
+                    size = androidx.compose.ui.geometry.Size(w, bottom - top),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx())
+                )
+                val fillTop = bottom - (bottom - top) * fill
+                drawRoundRect(
+                    brush = Brush.verticalGradient(listOf(SoftCoralLight, SoftCoralPrimary)),
+                    topLeft = androidx.compose.ui.geometry.Offset(left + 3.dp.toPx(), fillTop),
+                    size = androidx.compose.ui.geometry.Size(w - 6.dp.toPx(), bottom - fillTop - 3.dp.toPx()),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx())
+                )
+            }
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("❤️", fontSize = 24.sp)
+            }
+        }
+        Text(count.toString(), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = SoftCoralDark)
     }
 }

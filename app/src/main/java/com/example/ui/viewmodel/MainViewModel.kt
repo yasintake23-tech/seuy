@@ -18,7 +18,6 @@ import com.example.model.PairingResult
 import com.example.model.PartnerStatus
 import com.example.model.SecretLoveNote
 import com.example.model.UserProfile
-import com.example.service.CoupleMessageForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +29,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
-import com.example.util.NotificationHelper
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = AuthRepository(application.applicationContext)
@@ -39,8 +37,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val profileRepository = ProfileRepository(application.applicationContext, authRepository, r2StorageRepository)
     private val prefs = application.getSharedPreferences("ikimiz_prefs", android.content.Context.MODE_PRIVATE)
 
-    private val notifiedMessageIds = mutableSetOf<String>()
-    private var isFirstChatLoad = true
 
     // Double Tap Reaction Emoji Preference (Default: 🤍)
     private val _doubleTapEmoji = MutableStateFlow(prefs.getString("double_tap_emoji", "🤍") ?: "🤍")
@@ -120,6 +116,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // DM / Realtime Database Chat
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
+
+    private val _isLoadingOlderMessages = MutableStateFlow(false)
+    val isLoadingOlderMessages: StateFlow<Boolean> = _isLoadingOlderMessages.asStateFlow()
+
+    private val _hasMoreOlderMessages = MutableStateFlow(true)
+    val hasMoreOlderMessages: StateFlow<Boolean> = _hasMoreOlderMessages.asStateFlow()
+
+    private val _relationshipStartedAt = MutableStateFlow<Long?>(null)
+    val relationshipStartedAt: StateFlow<Long?> = _relationshipStartedAt.asStateFlow()
+
+    private val _heartWarCounts = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val heartWarCounts: StateFlow<Map<String, Long>> = _heartWarCounts.asStateFlow()
 
     val unreadMessageCount: StateFlow<Int> = _chatMessages.map { msgs ->
         val currentUid = _currentUser.value?.userId ?: ""
@@ -310,55 +318,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         liveDataJob?.cancel()
         val coupleId = coupleRepository.getCoupleDocId(uid1, uid2)
         _isDataLoading.value = true
-
-        // Start background synchronization service to ensure real-time notifications even when app is closed/minimized
-        try {
-            CoupleMessageForegroundService.start(getApplication(), uid1, uid2)
-        } catch (e: Exception) {
-            android.util.Log.w("MainViewModel", "Could not start CoupleMessageForegroundService: ${e.message}")
-        }
+        _chatMessages.value = emptyList()
+        _hasMoreOlderMessages.value = true
+        _isLoadingOlderMessages.value = false
+        _relationshipStartedAt.value = null
+        _heartWarCounts.value = emptyMap()
 
         liveDataJob = viewModelScope.launch {
-            // 1. Live Chat Messages (Firestore + Realtime DB)
+            // 1. Live chat: only the latest window is observed. Older messages are requested on demand.
             launch {
                 coupleRepository.observeChatMessages(coupleId).collectLatest { msgs ->
                     val locallyDeleted = getDeletedMessageIds()
                     val processed = msgs.map { m ->
                         if (m.isDeleted || locallyDeleted.contains(m.id)) {
                             m.copy(isDeleted = true, text = "", imageUrl = null, reactionEmoji = null)
-                        } else {
-                            m
-                        }
+                        } else m
                     }
-
-                    // Background & Out-of-chat notification for incoming messages from partner
-                    if (isFirstChatLoad) {
-                        processed.forEach { m -> notifiedMessageIds.add(m.id) }
-                        isFirstChatLoad = false
-                    } else {
-                        processed.forEach { m ->
-                            if ((m.senderId == uid2 || (m.senderId != uid1 && m.senderId != "me")) &&
-                                !notifiedMessageIds.contains(m.id) &&
-                                !m.isDeleted
-                            ) {
-                                notifiedMessageIds.add(m.id)
-                                if (_currentTab.value != BottomNavTab.CHAT) {
-                                    NotificationHelper.showChatNotification(
-                                        context = getApplication(),
-                                        senderName = _partnerUser.value?.displayName ?: "Sevgilin",
-                                        messageText = m.text,
-                                        messageId = m.id,
-                                        imageUrl = m.imageUrl
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    _chatMessages.value = processed
+                    _chatMessages.value = mergeRecentMessages(processed)
                     _isDataLoading.value = false
 
-                    // If currently on Chat tab and there are incoming unread messages, mark them as read
                     if (_currentTab.value == BottomNavTab.CHAT && processed.any { it.receiverId == uid1 && !it.isRead }) {
                         coupleRepository.markMessagesAsRead(coupleId, uid1)
                     }
@@ -408,6 +386,74 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
+            // 8. Relationship start
+            launch {
+                coupleRepository.observeRelationshipStartedAt(coupleId).collectLatest { startedAt ->
+                    _relationshipStartedAt.value = startedAt
+                }
+            }
+            // 9. Heart Wars
+            launch {
+                coupleRepository.observeHeartWar(coupleId, listOf(uid1, uid2)).collectLatest { counts ->
+                    _heartWarCounts.value = counts
+                }
+            }
+        }
+    }
+
+    private fun mergeRecentMessages(recent: List<ChatMessage>): List<ChatMessage> {
+        val byId = _chatMessages.value.associateBy { it.id }.toMutableMap()
+        recent.forEach { byId[it.id] = it }
+        return byId.values.sortedBy { it.timestamp }
+    }
+
+    fun loadOlderChatMessages() {
+        if (_isLoadingOlderMessages.value || !_hasMoreOlderMessages.value) return
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+        val oldest = _chatMessages.value.minOfOrNull { it.timestamp } ?: return
+
+        viewModelScope.launch {
+            _isLoadingOlderMessages.value = true
+            val result = coupleRepository.loadOlderChatMessages(coupleId, oldest)
+            result.onSuccess { older ->
+                if (older.isEmpty()) {
+                    _hasMoreOlderMessages.value = false
+                } else {
+                    _chatMessages.value = mergeRecentMessages(older)
+                    if (older.size < 30) _hasMoreOlderMessages.value = false
+                }
+            }.onFailure {
+                // Keep pagination enabled: a temporary network failure must not
+                // make the UI believe that the chat history has ended.
+            }
+            _isLoadingOlderMessages.value = false
+        }
+    }
+
+    fun incrementHeartWar() {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+        val before = _heartWarCounts.value
+        val optimistic = before.toMutableMap()
+        optimistic[user.userId] = (optimistic[user.userId] ?: 0L) + 1L
+        _heartWarCounts.value = optimistic
+        viewModelScope.launch {
+            coupleRepository.incrementHeart(coupleId, user.userId).onFailure {
+                _heartWarCounts.value = before
+            }
+        }
+    }
+
+    fun saveRelationshipStartedAt(startedAt: Long) {
+        val user = _currentUser.value ?: return
+        val partnerId = user.partnerId ?: return
+        val coupleId = coupleRepository.getCoupleDocId(user.userId, partnerId)
+        _relationshipStartedAt.value = startedAt
+        viewModelScope.launch {
+            coupleRepository.saveRelationshipStartedAt(coupleId, startedAt)
         }
     }
 
@@ -465,10 +511,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isPairingInProgress.value = false
 
             result.onSuccess {
-                CoupleMessageForegroundService.stop(getApplication())
                 partnerJob?.cancel()
                 liveDataJob?.cancel()
                 _partnerUser.value = null
+                _chatMessages.value = emptyList()
+                _heartWarCounts.value = emptyMap()
+                _relationshipStartedAt.value = null
+                _hasMoreOlderMessages.value = true
                 val updated = authRepository.getLocalProfile()
                 _currentUser.value = updated
                 _currentTab.value = BottomNavTab.HOME
@@ -889,8 +938,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pairingSuccessMessage.value = null
     }
 
+    fun setMessageNotificationsEnabled(enabled: Boolean) {
+        val user = _currentUser.value ?: return
+        val optimistic = user.copy(notificationsEnabled = enabled)
+        _currentUser.value = optimistic
+        authRepository.saveLocalProfile(optimistic)
+        viewModelScope.launch {
+            authRepository.setNotificationsEnabled(user.userId, enabled)
+        }
+    }
+
     fun signOut() {
-        CoupleMessageForegroundService.stop(getApplication())
         currentUserJob?.cancel()
         partnerJob?.cancel()
         liveDataJob?.cancel()

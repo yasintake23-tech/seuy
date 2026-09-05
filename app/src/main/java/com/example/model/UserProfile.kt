@@ -13,6 +13,7 @@ data class UserProfile(
     val partnerName: String? = null,
     val isPaired: Boolean = false,
     val pairedAt: Long? = null, // timestamp in ms
+    val notificationsEnabled: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val lastActive: Long = System.currentTimeMillis()
 ) {
@@ -34,6 +35,7 @@ data class UserProfile(
             "partnerName" to partnerName,
             "isPaired" to isPaired,
             "pairedAt" to pairedAt,
+            "notificationsEnabled" to notificationsEnabled,
             "createdAt" to createdAt,
             "lastActive" to lastActive
         )
@@ -57,6 +59,7 @@ data class UserProfile(
                 partnerName = map["partnerName"] as? String,
                 isPaired = (map["isPaired"] as? Boolean) ?: false,
                 pairedAt = (map["pairedAt"] as? Number)?.toLong(),
+                notificationsEnabled = (map["notificationsEnabled"] as? Boolean) ?: true,
                 createdAt = (map["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
                 lastActive = (map["lastActive"] as? Number)?.toLong() ?: System.currentTimeMillis()
             )

@@ -327,6 +327,11 @@ class AuthRepository(private val context: Context) {
     }
 
     fun signOut() {
+        val uid = auth.currentUser?.uid
+        if (!uid.isNullOrBlank()) {
+            firestore.collection("users").document(uid)
+                .set(mapOf("fcmToken" to null, "fcmTokenUpdatedAt" to System.currentTimeMillis()), SetOptions.merge())
+        }
         try {
             auth.signOut()
         } catch (e: Exception) {
@@ -345,7 +350,8 @@ class AuthRepository(private val context: Context) {
                     avatarPreset = (updates["avatarPreset"] as? String) ?: currentLocal.avatarPreset,
                     avatarBase64 = if (updates.containsKey("avatarBase64")) (updates["avatarBase64"] as? String) else currentLocal.avatarBase64,
                     displayName = (updates["displayName"] as? String) ?: currentLocal.displayName,
-                    birthDate = (updates["birthDate"] as? String) ?: currentLocal.birthDate
+                    birthDate = (updates["birthDate"] as? String) ?: currentLocal.birthDate,
+                    notificationsEnabled = (updates["notificationsEnabled"] as? Boolean) ?: currentLocal.notificationsEnabled
                 )
                 saveLocalProfile(updated)
             }
@@ -354,6 +360,10 @@ class AuthRepository(private val context: Context) {
             Log.e(TAG, "Error updating user profile: ${e.message}", e)
             Result.failure(e)
         }
+    }
+
+    suspend fun setNotificationsEnabled(userId: String, enabled: Boolean): Result<Unit> {
+        return updateUserProfile(userId, mapOf("notificationsEnabled" to enabled))
     }
 
     fun saveLocalProfile(profile: UserProfile) {
@@ -368,6 +378,7 @@ class AuthRepository(private val context: Context) {
             .putString("partner_id", profile.partnerId)
             .putString("partner_name", profile.partnerName)
             .putBoolean("is_paired", profile.isPaired)
+            .putBoolean("notifications_enabled", profile.notificationsEnabled)
             .putLong("paired_at", profile.pairedAt ?: 0L)
             .apply()
     }
@@ -386,6 +397,7 @@ class AuthRepository(private val context: Context) {
             partnerId = prefs.getString("partner_id", null),
             partnerName = prefs.getString("partner_name", null),
             isPaired = prefs.getBoolean("is_paired", false),
+            notificationsEnabled = prefs.getBoolean("notifications_enabled", true),
             pairedAt = if (pairedAtVal > 0) pairedAtVal else null
         )
     }

@@ -13,6 +13,7 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
@@ -53,8 +54,12 @@ class CoupleDataRepository(private val context: Context) {
     // 1. LIVE REALTIME CHAT (Firestore + Realtime DB)
     // ==========================================
 
-    fun observeChatMessages(coupleId: String): Flow<List<ChatMessage>> {
-        return chatRepo.observeMessages(coupleId)
+    fun observeChatMessages(coupleId: String, limit: Int = 30): Flow<List<ChatMessage>> {
+        return chatRepo.observeMessages(coupleId, limit)
+    }
+
+    suspend fun loadOlderChatMessages(coupleId: String, beforeTimestamp: Long, limit: Int = 30): Result<List<ChatMessage>> {
+        return chatRepo.loadOlderMessages(coupleId, beforeTimestamp, limit)
     }
 
     fun observePartnerTyping(coupleId: String, partnerId: String): Flow<Boolean> {
@@ -339,5 +344,75 @@ class CoupleDataRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error saving daily question answer", e)
         }
+    }
+
+
+    // ==========================================
+    // 8. RELATIONSHIP START + HEART WARS (Firestore)
+    // ==========================================
+
+    fun observeRelationshipStartedAt(coupleId: String): Flow<Long?> = callbackFlow {
+        if (coupleId.isBlank()) {
+            trySend(null)
+            awaitClose { }
+            return@callbackFlow
+        }
+        val registration = firestore.collection("couples").document(coupleId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w(TAG, "Relationship settings error", error)
+                    return@addSnapshotListener
+                }
+                trySend((snapshot?.getLong("relationshipStartedAt")))
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun saveRelationshipStartedAt(coupleId: String, startedAt: Long): Result<Unit> = runCatching {
+        firestore.collection("couples").document(coupleId)
+            .set(
+                mapOf(
+                    "relationshipStartedAt" to startedAt,
+                    "relationshipStartedAtUpdatedAt" to System.currentTimeMillis()
+                ),
+                SetOptions.merge()
+            ).await()
+    }
+
+    fun observeHeartWar(coupleId: String, userIds: List<String>): Flow<Map<String, Long>> = callbackFlow {
+        if (coupleId.isBlank() || userIds.isEmpty()) {
+            trySend(emptyMap())
+            awaitClose { }
+            return@callbackFlow
+        }
+
+        val state = mutableMapOf<String, Long>()
+        val registrations = userIds.distinct().map { userId ->
+            firestore.collection("couples").document(coupleId)
+                .collection("heart_wars").document(userId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w(TAG, "Heart war listener error", error)
+                        return@addSnapshotListener
+                    }
+                    state[userId] = snapshot?.getLong("hearts") ?: 0L
+                    trySend(state.toMap())
+                }
+        }
+
+        awaitClose { registrations.forEach { it.remove() } }
+    }
+
+    suspend fun incrementHeart(coupleId: String, userId: String): Result<Unit> = runCatching {
+        firestore.collection("couples").document(coupleId)
+            .collection("heart_wars").document(userId)
+            .set(
+                mapOf(
+                    "userId" to userId,
+                    "hearts" to FieldValue.increment(1),
+                    "updatedAt" to System.currentTimeMillis()
+                ),
+                SetOptions.merge()
+            ).await()
     }
 }

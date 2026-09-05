@@ -41,6 +41,7 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.WarmCreamBackground
 import com.example.ui.viewmodel.MainViewModel
 import com.example.util.NotificationHelper
+import com.example.util.MyFirebaseMessagingService
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,6 +98,10 @@ fun MainApp(
   val partnerStatus by viewModel.partnerStatus.collectAsState()
   val memoryPins by viewModel.memoryPins.collectAsState()
   val chatMessages by viewModel.chatMessages.collectAsState()
+  val isLoadingOlderMessages by viewModel.isLoadingOlderMessages.collectAsState()
+  val hasMoreOlderMessages by viewModel.hasMoreOlderMessages.collectAsState()
+  val relationshipStartedAt by viewModel.relationshipStartedAt.collectAsState()
+  val heartWarCounts by viewModel.heartWarCounts.collectAsState()
   val unreadMessageCount by viewModel.unreadMessageCount.collectAsState()
   val isPartnerTyping by viewModel.isPartnerTyping.collectAsState()
   val coupleMemories by viewModel.coupleMemories.collectAsState()
@@ -108,8 +113,10 @@ fun MainApp(
   ) { _ -> }
 
   LaunchedEffect(Unit) {
-    // Create channel for Android 8+
+    // Create the single chat channel and remove stale notifications from the
+    // previous polling implementation exactly once.
     NotificationHelper.createNotificationChannel(context)
+    NotificationHelper.clearLegacyNotificationsOnce(context)
 
     // Request runtime permission for Android 13+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -125,6 +132,19 @@ fun MainApp(
     if (targetTab == "chat") {
       viewModel.selectTab(BottomNavTab.CHAT)
     }
+  }
+
+  LaunchedEffect(currentUser?.userId) {
+    if (currentUser != null) {
+      MyFirebaseMessagingService.syncCurrentToken()
+    }
+  }
+
+  LaunchedEffect(currentTab) {
+    context.getSharedPreferences("ikimiz_runtime", android.content.Context.MODE_PRIVATE)
+      .edit()
+      .putBoolean("chat_open", currentTab == BottomNavTab.CHAT)
+      .apply()
   }
 
   Crossfade(
@@ -194,16 +214,7 @@ fun MainApp(
           ) { tab ->
             when (tab) {
               BottomNavTab.GAMES -> {
-                GamesScreen(
-                  bucketList = bucketList,
-                  secretNotes = secretNotes,
-                  dailyQuestions = dailyQuestions,
-                  onToggleBucketItem = { viewModel.toggleBucketItem(it) },
-                  onAddBucketItem = { title, cat -> viewModel.addBucketItem(title, cat) },
-                  onUnlockNote = { viewModel.unlockSecretNote(it) },
-                  onAddSecretNote = { title, content, cond -> viewModel.addSecretNote(title, content, cond) },
-                  onAnswerDailyQuestion = { qId, ans -> viewModel.answerDailyQuestion(qId, ans) }
-                )
+                GamesScreen()
               }
               BottomNavTab.MAP -> {
                 CoupleMapScreen(
@@ -221,6 +232,9 @@ fun MainApp(
                   currentUser = user,
                   partnerUser = partnerUser,
                   bucketList = bucketList,
+                  relationshipStartedAt = relationshipStartedAt,
+                  heartWarCounts = heartWarCounts,
+                  onHeartTap = { viewModel.incrementHeartWar() },
                   onOpenSettings = { viewModel.openSettings() },
                   onNavigateToTab = { viewModel.selectTab(it) }
                 )
@@ -238,7 +252,10 @@ fun MainApp(
                   onSendMessage = { text, imageUri, replyMsg -> viewModel.sendChatMessage(text, imageUri, replyMsg) },
                   onDeleteMessage = { id -> viewModel.deleteChatMessage(id) },
                   onEditMessage = { id, newText -> viewModel.editChatMessage(id, newText) },
-                  onReactMessage = { id, emoji -> viewModel.reactToChatMessage(id, emoji) }
+                  onReactMessage = { id, emoji -> viewModel.reactToChatMessage(id, emoji) },
+                  onLoadOlderMessages = { viewModel.loadOlderChatMessages() },
+                  isLoadingOlderMessages = isLoadingOlderMessages,
+                  hasMoreOlderMessages = hasMoreOlderMessages
                 )
               }
               BottomNavTab.PROFILE -> {
@@ -275,7 +292,10 @@ fun MainApp(
       onDismiss = { viewModel.closeSettings() },
       onOpenUnpairConfirm = { viewModel.openUnpairConfirm() },
       onSignOut = { viewModel.signOut() },
-      onThemeModeChanged = onThemeModeChanged
+      onThemeModeChanged = onThemeModeChanged,
+      relationshipStartedAt = relationshipStartedAt,
+      onSetRelationshipStartedAt = { viewModel.saveRelationshipStartedAt(it) },
+      onSetMessageNotificationsEnabled = { viewModel.setMessageNotificationsEnabled(it) }
     )
   }
 

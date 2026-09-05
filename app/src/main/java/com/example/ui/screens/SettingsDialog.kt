@@ -30,7 +30,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Check
@@ -90,8 +89,6 @@ import com.example.ui.theme.RoseDark
 import com.example.ui.theme.RosePrimary
 import com.example.ui.theme.RoseSoft
 import com.example.ui.theme.SageGreen
-import com.example.ui.theme.WineTertiary
-import com.example.util.BatteryOptimizationHelper
 import com.example.util.NotificationHelper
 
 enum class SettingsCategory(
@@ -99,15 +96,12 @@ enum class SettingsCategory(
     val subtitle: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
-    ACCOUNT("Hesap & Profil", "Profilin, hesabın ve kişisel bilgiler", Icons.Default.Person),
-    APPEARANCE("Görünüm", "Tema, renkler ve arayüz tercihleri", Icons.Default.Palette),
-    CHAT("Sohbet", "Mesajlaşma ve konuşma davranışları", Icons.Default.Chat),
-    NOTIFICATIONS("Bildirimler", "Mesaj ve uygulama bildirimleri", Icons.Default.Notifications),
-    PRIVACY("Gizlilik", "Görünürlük ve etkileşim tercihleri", Icons.Default.Lock),
-    MEDIA("Medya & Depolama", "Fotoğraf, video ve indirme tercihleri", Icons.Default.PhotoLibrary),
-    COUPLE("Biz", "Çift deneyimi ve ortak alanlar", Icons.Default.Favorite),
-    APP("Uygulama", "Dil, performans ve genel davranış", Icons.Default.SettingsSuggest),
-    ABOUT("Hakkında", "İkimiz hakkında ve destek", Icons.Default.Info)
+    ACCOUNT("Hesap & Profil", "Profilin ve hesabın", Icons.Default.Person),
+    APPEARANCE("Görünüm", "Tema ve akıcılık", Icons.Default.Palette),
+    CHAT("Sohbet", "Mesaj davranışları", Icons.Default.Chat),
+    NOTIFICATIONS("Bildirimler", "Mesaj bildirimleri", Icons.Default.Notifications),
+    COUPLE("Biz", "Tanışma tarihi ve ortak alan", Icons.Default.Favorite),
+    ABOUT("Hakkında", "İkimiz hakkında", Icons.Default.Info)
 }
 
 private class SettingsStore(context: Context) {
@@ -130,6 +124,9 @@ fun SettingsDialog(
     onOpenUnpairConfirm: () -> Unit,
     onSignOut: () -> Unit,
     onThemeModeChanged: (String) -> Unit = {},
+    onSetRelationshipStartedAt: (Long) -> Unit = {},
+    relationshipStartedAt: Long? = null,
+    onSetMessageNotificationsEnabled: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -188,6 +185,9 @@ fun SettingsDialog(
                         store.setString("theme_mode", it)
                         onThemeModeChanged(it)
                     },
+                    onSetRelationshipStartedAt = onSetRelationshipStartedAt,
+                    relationshipStartedAt = relationshipStartedAt,
+                    onSetMessageNotificationsEnabled = onSetMessageNotificationsEnabled,
                     onOpenUnpairConfirm = onOpenUnpairConfirm,
                     onSignOut = onSignOut
                 )
@@ -210,7 +210,7 @@ private fun SettingsHome(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("Ayarlar", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = WineTertiary)
+                Text("Ayarlar", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text("İkimiz'i kendinize göre şekillendirin", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onDismiss) {
@@ -228,12 +228,12 @@ private fun SettingsHome(
                 AvatarImage(currentUser.avatarPreset, currentUser.avatarBase64, 52.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(currentUser.displayName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = WineTertiary)
+                    Text(currentUser.displayName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
                     Text(currentUser.email, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         if (currentUser.isPaired) "💞 ${currentUser.partnerName ?: "Sevgilin"} ile eşleşti" else "Henüz eşleşme yok",
                         fontSize = 11.sp,
-                        color = RoseDark,
+                        color = RosePrimary,
                         modifier = Modifier.padding(top = 3.dp)
                     )
                 }
@@ -268,7 +268,7 @@ private fun SettingsCategoryRow(category: SettingsCategory, onClick: () -> Unit)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(category.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = WineTertiary)
+                Text(category.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(category.subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text("›", fontSize = 26.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -292,6 +292,9 @@ private fun SettingsCategoryDetail(
     onNotificationPermission: () -> Unit,
     refreshNotifications: () -> Unit,
     onThemeModeChanged: (String) -> Unit,
+    onSetRelationshipStartedAt: (Long) -> Unit,
+    relationshipStartedAt: Long?,
+    onSetMessageNotificationsEnabled: (Boolean) -> Unit,
     onOpenUnpairConfirm: () -> Unit,
     onSignOut: () -> Unit
 ) {
@@ -299,7 +302,7 @@ private fun SettingsCategoryDetail(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri") }
             Column(Modifier.weight(1f)) {
-                Text(category.title, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = WineTertiary)
+                Text(category.title, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(category.subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Kapat") }
@@ -312,13 +315,10 @@ private fun SettingsCategoryDetail(
         ) {
             when (category) {
                 SettingsCategory.ACCOUNT -> AccountSettings(currentUser, onChangeProfilePhoto, onChangeAvatarPreset, onOpenUnpairConfirm, onSignOut)
-                SettingsCategory.APPEARANCE -> AppearanceSettings(themeMode, store, onThemeModeChanged)
-                SettingsCategory.CHAT -> ChatSettings(doubleTapEmoji, onSetDoubleTapEmoji, store)
-                SettingsCategory.NOTIFICATIONS -> NotificationSettings(isNotificationsEnabled, onNotificationPermission, refreshNotifications, store)
-                SettingsCategory.PRIVACY -> PrivacySettings(store)
-                SettingsCategory.MEDIA -> MediaSettings(store)
-                SettingsCategory.COUPLE -> CoupleSettings(currentUser, store)
-                SettingsCategory.APP -> AppSettings(store)
+                SettingsCategory.APPEARANCE -> AppearanceSettings(themeMode, onThemeModeChanged)
+                SettingsCategory.CHAT -> ChatSettings(doubleTapEmoji, onSetDoubleTapEmoji)
+                SettingsCategory.NOTIFICATIONS -> NotificationSettings(isNotificationsEnabled, currentUser.notificationsEnabled, onNotificationPermission, refreshNotifications, onSetMessageNotificationsEnabled)
+                SettingsCategory.COUPLE -> CoupleSettings(currentUser, relationshipStartedAt, onSetRelationshipStartedAt)
                 SettingsCategory.ABOUT -> AboutSettings()
             }
         }
@@ -345,14 +345,14 @@ private fun AccountSettings(
             Column(Modifier.weight(1f)) {
                 Text(currentUser.displayName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Text(currentUser.email, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (currentUser.birthDate.isNotBlank()) Text("Doğum tarihi: ${currentUser.birthDate}", fontSize = 11.sp, color = RoseDark)
+                if (currentUser.birthDate.isNotBlank()) Text("Doğum tarihi: ${currentUser.birthDate}", fontSize = 11.sp, color = RosePrimary)
             }
         }
         OutlinedButton(onClick = onChangeProfilePhoto, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(11.dp)) {
             Icon(Icons.Default.AddPhotoAlternate, null, modifier = Modifier.size(17.dp), tint = RosePrimary)
             Spacer(Modifier.width(6.dp)); Text("Profil fotoğrafını değiştir")
         }
-        Text("Avatar", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = RoseDark)
+        Text("Avatar", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = RosePrimary)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(AVATAR_PRESETS) { item ->
                 Box(
@@ -376,169 +376,161 @@ private fun AccountSettings(
 }
 
 @Composable
-private fun AppearanceSettings(themeMode: String, store: SettingsStore, onThemeModeChanged: (String) -> Unit) {
+private fun AppearanceSettings(themeMode: String, onThemeModeChanged: (String) -> Unit) {
     SettingsGroup("Tema") {
         ChoiceRow("Sistem", "Telefonun temasını takip eder", themeMode == "system") { onThemeModeChanged("system") }
-        ChoiceRow("Açık", "Açık ve sıcak İkimiz görünümü", themeMode == "light") { onThemeModeChanged("light") }
+        ChoiceRow("Açık", "Açık ve sıcak görünüm", themeMode == "light") { onThemeModeChanged("light") }
         ChoiceRow("Koyu", "Gece kullanımı için koyu tema", themeMode == "dark") { onThemeModeChanged("dark") }
     }
-    SettingsGroup("Arayüz") {
-        SettingSwitch("Animasyonlar", "Geçiş ve mikro animasyonları kullan", store, "animations", true)
-        SettingSwitch("Dinamik renkler", "Sistem renklerini kullan", store, "dynamic_colors", false)
-        SettingSwitch("Kompakt görünüm", "Listelerde daha az boşluk kullan", store, "compact_ui", false)
-    }
+    Text("Tüm ana metinler sistem uyumlu ve okunabilir tipografi kullanır.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
-private fun ChatSettings(doubleTapEmoji: String, onSetDoubleTapEmoji: (String) -> Unit, store: SettingsStore) {
-    SettingsGroup("Mesaj davranışı") {
-        SettingSwitch("Yazıyor göstergesi", "Yazarken karşı tarafa bilgi gönder", store, "typing_indicator", true)
-        SettingSwitch("Okundu bilgisi", "Mesajların okundu durumunu göster", store, "read_receipts", true)
-        SettingSwitch("Enter ile gönder", "Enter tuşunu gönderme için kullan", store, "enter_to_send", false)
-        SettingSwitch("Bağlantı önizlemeleri", "Mesajlardaki bağlantılara önizleme ekle", store, "link_previews", true)
-    }
+private fun ChatSettings(doubleTapEmoji: String, onSetDoubleTapEmoji: (String) -> Unit) {
     SettingsGroup("Çift dokunma tepkisi") {
-        Text("Mesaja iki kez dokununca gönderilecek tepki", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        val emojis = listOf("🤍", "❤️", "💖", "🥰", "✨", "🔥", "🌸", "🧸", "🐾", "😘", "😍", "😂")
+        Text("Mesaja iki kez dokununca kullanılacak kalp/emojiyi seç.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val emojis = listOf("🤍", "❤️", "💖", "🥰", "✨", "🔥", "🌸", "🧸", "😘", "😍", "😂")
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(emojis) { emoji ->
                 Box(
-                    Modifier.size(40.dp).clip(CircleShape).background(if (emoji == doubleTapEmoji) RosePrimary else MaterialTheme.colorScheme.surfaceVariant)
-                        .border(1.dp, if (emoji == doubleTapEmoji) RoseDark else BorderLight, CircleShape).clickable { onSetDoubleTapEmoji(emoji) },
+                    Modifier.size(42.dp).clip(CircleShape)
+                        .background(if (emoji == doubleTapEmoji) RosePrimary else MaterialTheme.colorScheme.surfaceVariant)
+                        .border(1.dp, if (emoji == doubleTapEmoji) RoseDark else BorderLight, CircleShape)
+                        .clickable { onSetDoubleTapEmoji(emoji) },
                     contentAlignment = Alignment.Center
-                ) { Text(emoji, fontSize = 19.sp) }
+                ) { Text(emoji, fontSize = 20.sp) }
             }
         }
     }
-    SettingsGroup("Sohbet görünümü") {
-        SettingSwitch("Mesaj saatini göster", "Mesajların saat bilgisini göster", store, "show_message_time", true)
-        SettingSwitch("Avatarları göster", "Sohbette profil avatarlarını göster", store, "show_chat_avatars", true)
-        SettingSwitch("Titreşimli tepki", "Tepki gönderirken kısa titreşim", store, "reaction_haptic", true)
-    }
 }
 
 @Composable
-private fun NotificationSettings(isEnabled: Boolean, onPermission: () -> Unit, refresh: () -> Unit, store: SettingsStore) {
-    SettingsGroup("Bildirim durumu") {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (isEnabled) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff, null, tint = if (isEnabled) RosePrimary else MaterialTheme.colorScheme.error, modifier = Modifier.size(25.dp))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(if (isEnabled) "Bildirimler açık" else "Bildirimler kapalı", fontWeight = FontWeight.Bold)
-                Text(if (isEnabled) "Yeni mesajları ve uygulama bildirimlerini alabilirsin." else "Bildirimleri açarak yeni mesajları kaçırma.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+private fun NotificationSettings(
+    isSystemEnabled: Boolean,
+    messagesEnabled: Boolean,
+    onPermission: () -> Unit,
+    refresh: () -> Unit,
+    onSetMessageNotificationsEnabled: (Boolean) -> Unit
+) {
+    SettingsGroup("Mesaj bildirimleri") {
+        SettingSwitch(
+            title = "Mesaj bildirimleri",
+            subtitle = "Partnerinden yeni mesaj geldiğinde bildirim al",
+            checked = messagesEnabled,
+            onCheckedChange = onSetMessageNotificationsEnabled
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (isSystemEnabled) "Android bildirimleri açık." else "Android bildirimleri kapalı.",
+            fontSize = 11.sp,
+            color = if (isSystemEnabled) SageGreen else MaterialTheme.colorScheme.error
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = { onPermission(); refresh() },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = RosePrimary)
+        ) {
+            Icon(Icons.Default.Notifications, null)
+            Spacer(Modifier.width(6.dp))
+            Text("Bildirimleri aç / yönet")
         }
-        Button(onClick = { onPermission(); refresh() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(11.dp), colors = ButtonDefaults.buttonColors(containerColor = RosePrimary)) {
-            Icon(Icons.Default.Notifications, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text(if (isEnabled) "Sistem bildirim ayarlarını aç" else "Bildirimleri etkinleştir")
-        }
-    }
-    SettingsGroup("Bildirim türleri") {
-        SettingSwitch("Mesaj bildirimleri", "Yeni sohbet mesajları", store, "notif_messages", true)
-        SettingSwitch("Mesaj önizlemesi", "Bildirimde mesaj metnini göster", store, "notif_preview", true)
-        SettingSwitch("Bildirim sesi", "Mesaj geldiğinde ses çal", store, "notif_sound", true)
-        SettingSwitch("Titreşim", "Mesaj bildirimlerinde titreşim", store, "notif_vibration", true)
-        SettingSwitch("Partner etkinliği", "Yazıyor / çevrimiçi gibi etkinlikler", store, "notif_activity", true)
-    }
-    SettingsGroup("Arka plan") {
-        SettingSwitch("Arka planda mesaj takibi", "Uygulama arka plandayken mesaj akışını destekle", store, "background_messages", true)
-        SettingsAction("Pil optimizasyonunu yönet", "Android pil ayarlarını aç", Icons.Default.BatterySaver) { }
     }
 }
 
 @Composable
-private fun PrivacySettings(store: SettingsStore) {
-    SettingsGroup("Görünürlük") {
-        SettingSwitch("Çevrimiçi durum", "Çevrimiçi olduğunu partnerine göster", store, "online_status", true)
-        SettingSwitch("Son görülme", "Son aktif olduğun zamanı göster", store, "last_seen", true)
-        SettingSwitch("Yazıyor durumu", "Yazarken partnerine göster", store, "typing_visibility", true)
-        SettingSwitch("Okundu bilgisi", "Mesajları okuduğunu göster", store, "privacy_read_receipts", true)
-    }
-    SettingsGroup("Profil") {
-        ChoiceRow("Partnerim görebilir", "Profil bilgilerini partnerinle paylaş", store.getString("profile_visibility", "partner") == "partner") { store.setString("profile_visibility", "partner") }
-        ChoiceRow("Sadece temel bilgiler", "Daha sınırlı profil görünürlüğü", store.getString("profile_visibility", "partner") == "basic") { store.setString("profile_visibility", "basic") }
-    }
-    SettingsGroup("Uygulama kilidi") {
-        SettingSwitch("Uygulama kilidi", "İleride biyometrik/PIN kilidi için hazır ayar", store, "app_lock", false)
-        Text("Kilit mekanizması bir sonraki geliştirme aşamasında bağlanacak.", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
+private fun CoupleSettings(
+    currentUser: UserProfile,
+    relationshipStartedAt: Long?,
+    onSetRelationshipStartedAt: (Long) -> Unit
+) {
+    val context = LocalContext.current
+    var selectedDate by remember(relationshipStartedAt) { mutableStateOf(relationshipStartedAt) }
 
-@Composable
-private fun MediaSettings(store: SettingsStore) {
-    SettingsGroup("Otomatik indirme") {
-        SettingSwitch("Wi‑Fi'da otomatik indir", "Medya dosyalarını Wi‑Fi bağlantısında indir", store, "auto_download_wifi", true)
-        SettingSwitch("Mobil veride otomatik indir", "Mobil veride medya indirmeye izin ver", store, "auto_download_mobile", false)
-        SettingSwitch("Videoları otomatik indir", "Videoları otomatik indirme listesine dahil et", store, "auto_download_video", false)
-    }
-    SettingsGroup("Gönderme") {
-        SettingSwitch("Fotoğraf sıkıştır", "Daha az veri kullanmak için fotoğrafları küçült", store, "compress_photos", true)
-        SettingSwitch("Yüksek kalite", "Uygun olduğunda daha yüksek medya kalitesi", store, "high_quality_media", true)
-        SettingSwitch("Galerine kaydet", "Gönderilen medyaları cihaz galerisine kaydet", store, "save_to_gallery", false)
-    }
-    SettingsGroup("Depolama") {
-        SettingsAction("Depolama kullanımını görüntüle", "Medya kullanımını ve önbelleği göster", Icons.Default.Folder) { }
-        SettingsAction("Önbelleği temizle", "Yerel geçici dosyaları temizle", Icons.Default.Folder) { }
-    }
-}
-
-@Composable
-private fun CoupleSettings(currentUser: UserProfile, store: SettingsStore) {
     SettingsGroup("Bizim alanımız") {
         InfoRow("Partner", currentUser.partnerName ?: "Henüz eşleşmedin", Icons.Default.Favorite)
-        InfoRow("Eşleşme tarihi", currentUser.pairedAt?.let { java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale("tr", "TR")).format(java.util.Date(it)) } ?: "—", Icons.Default.Favorite)
+        InfoRow("Eşleşme tarihi",
+            currentUser.pairedAt?.let { java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale("tr", "TR")).format(java.util.Date(it)) } ?: "—",
+            Icons.Default.Favorite
+        )
     }
-    SettingsGroup("Çift deneyimi") {
-        SettingSwitch("Kalp efektleri", "Özel romantik animasyonları kullan", store, "couple_heart_effects", true)
-        SettingSwitch("Ortak etkinlik bildirimleri", "Ortak alanlardaki yeni etkinlikleri bildir", store, "couple_activity_notifications", true)
-        SettingSwitch("Günlük soru hatırlatıcıları", "Günlük çift sorularını hatırlat", store, "daily_question_reminders", true)
-        SettingSwitch("Anı ekleme önerileri", "Anı oluşturmak için küçük öneriler göster", store, "memory_suggestions", true)
-    }
-    SettingsGroup("İleride gelecek özellikler") {
-        SettingsAction("Yıldönümü ve özel günler", "Özel tarihleri ve geri sayımları yönet", Icons.Default.Favorite) { }
-        SettingsAction("Ortak hedefler", "Birlikte yapılacaklar ve hedefler", Icons.Default.Check) { }
-        SettingsAction("Çift teması", "İkinize özel renk ve stil oluştur", Icons.Default.Palette) { }
-    }
-}
 
-@Composable
-private fun AppSettings(store: SettingsStore) {
-    SettingsGroup("Genel") {
-        ChoiceRow("Türkçe", "Uygulama dili", store.getString("language", "tr") == "tr") { store.setString("language", "tr") }
-        SettingSwitch("Haptik geri bildirim", "Dokunmalarda hafif titreşim", store, "haptics", true)
-        SettingSwitch("Yumuşak geçişler", "Ekran değişimlerinde geçiş animasyonları", store, "smooth_transitions", true)
-        SettingSwitch("Otomatik yenileme", "Aktif ekranlarda veriyi yenile", store, "auto_refresh", true)
-    }
-    SettingsGroup("Başlangıç") {
-        ChoiceRow("Ana sayfa", "Uygulama açıldığında ana sayfayı göster", store.getString("startup_tab", "home") == "home") { store.setString("startup_tab", "home") }
-        ChoiceRow("Sohbet", "Uygulama açıldığında sohbeti göster", store.getString("startup_tab", "home") == "chat") { store.setString("startup_tab", "chat") }
-    }
-    SettingsGroup("Performans") {
-        SettingSwitch("Düşük veri kullanımı", "Medya ve ağ işlemlerini daha tutumlu yap", store, "low_data_mode", false)
-        SettingSwitch("Arka plan senkronizasyonu", "Uygulama arka plandayken senkronizasyonu sürdür", store, "background_sync", true)
+    SettingsGroup("Tanıştığımız tarih") {
+        Text(
+            "Tarihi ve saati bir kez ayarla. Bu değer iki telefonda Firebase üzerinden aynı kalır.",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = {
+                val calendar = Calendar.getInstance()
+                DatePickerDialog(
+                    context,
+                    { _, year, month, day ->
+                        val dateCal = Calendar.getInstance().apply {
+                            set(Calendar.YEAR, year)
+                            set(Calendar.MONTH, month)
+                            set(Calendar.DAY_OF_MONTH, day)
+                        }
+                        TimePickerDialog(
+                            context,
+                            { _, hour, minute ->
+                                dateCal.set(Calendar.HOUR_OF_DAY, hour)
+                                dateCal.set(Calendar.MINUTE, minute)
+                                dateCal.set(Calendar.SECOND, 0)
+                                dateCal.set(Calendar.MILLISECOND, 0)
+                                selectedDate = dateCal.timeInMillis
+                                onSetRelationshipStartedAt(dateCal.timeInMillis)
+                            },
+                            calendar.get(Calendar.HOUR_OF_DAY),
+                            calendar.get(Calendar.MINUTE),
+                            true
+                        ).show()
+                    },
+                    calendar.get(Calendar.YEAR),
+                    calendar.get(Calendar.MONTH),
+                    calendar.get(Calendar.DAY_OF_MONTH)
+                ).show()
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = RosePrimary)
+        ) {
+            Text("Tarih + saat seç")
+        }
+        selectedDate?.let {
+            Text(
+                "Seçilen: " + java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale("tr", "TR")).format(java.util.Date(it)),
+                fontSize = 11.sp,
+                color = RosePrimary,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
     }
 }
 
 @Composable
 private fun AboutSettings() {
     SettingsGroup("İkimiz") {
-        InfoRow("Sürüm", "1.1 • Geniş Ayarlar", Icons.Default.Info)
-        InfoRow("Platform", "Android • Jetpack Compose", Icons.Default.PlayArrow)
-        InfoRow("Medya altyapısı", "Cloudflare R2", Icons.Default.PhotoLibrary)
+        InfoRow("Sürüm", "1.2 • Firebase + gerçek zamanlı sohbet", Icons.Default.Info)
+        Text(
+            "İkimiz, iki kişinin mesajlarını, anılarını ve ortak küçük anlarını tek bir yerde tutması için tasarlanıyor.",
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
     SettingsGroup("Destek") {
-        SettingsAction("Yardım ve SSS", "Uygulamanın kullanımını öğren", Icons.Default.Info) { }
-        SettingsAction("Sorun bildir", "Bir problem veya öneri gönder", Icons.Default.Email) { }
-        SettingsAction("Gizlilik politikası", "Gizlilik bilgilerini görüntüle", Icons.Default.Lock) { }
-    }
-    SettingsGroup("Teşekkürler") {
-        Text("İkimiz, iki kişinin birlikte anılarını, mesajlarını ve küçük mutluluklarını tek bir yerde tutması için tasarlanıyor.", fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Yardım ve diğer bölümler sade tutuldu; kullanılmayan ayar bırakılmadı.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column {
-        Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RoseDark, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+        Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RosePrimary, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
         Spacer(Modifier.height(6.dp))
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)),
@@ -551,14 +543,18 @@ private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> 
 }
 
 @Composable
-private fun SettingSwitch(title: String, subtitle: String, store: SettingsStore, key: String, default: Boolean) {
-    var checked by remember(key) { mutableStateOf(store.getBoolean(key, default)) }
+private fun SettingSwitch(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 8.dp)) {
-            Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Text(subtitle, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp)
         }
-        Switch(checked = checked, onCheckedChange = { checked = it; store.setBoolean(key, it) })
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

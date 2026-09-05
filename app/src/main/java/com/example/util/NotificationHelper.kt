@@ -18,8 +18,6 @@ object NotificationHelper {
     private const val TAG = "NotificationHelper"
     const val CHANNEL_ID = "ikimiz_chat_notifications"
     const val CHANNEL_NAME = "İkimiz Aşk ve Sohbet Bildirimleri"
-    const val SERVICE_CHANNEL_ID = "ikimiz_background_service"
-    const val SERVICE_CHANNEL_NAME = "İkimiz Arka Plan Bağlantı Servisi"
     const val NOTIFICATION_ID_BASE = 1001
     const val SERVICE_NOTIFICATION_ID = 2001
 
@@ -78,21 +76,24 @@ object NotificationHelper {
                 vibrationPattern = longArrayOf(0, 200, 100, 200)
             }
 
-            val serviceChannel = NotificationChannel(
-                SERVICE_CHANNEL_ID,
-                SERVICE_CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Sevgilinizden arka planda anlık mesaj alabilmek için çalışan servis"
-                setShowBadge(false)
-                enableLights(false)
-                enableVibration(false)
-            }
-
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             manager?.createNotificationChannel(chatChannel)
-            manager?.createNotificationChannel(serviceChannel)
         }
+    }
+
+
+    /**
+     * Clears notifications left behind by the removed polling/foreground-service
+     * implementation. This runs only once after the notification architecture was
+     * migrated to FCM, so a user does not get a flood of stale messages on launch.
+     */
+    fun clearLegacyNotificationsOnce(context: Context) {
+        val prefs = context.getSharedPreferences("ikimiz_notification_migration", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("legacy_cleared_v1", false)) return
+        runCatching {
+            NotificationManagerCompat.from(context).cancelAll()
+            prefs.edit().putBoolean("legacy_cleared_v1", true).apply()
+        }.onFailure { Log.w(TAG, "Could not clear legacy notifications: ${it.message}") }
     }
 
     fun showChatNotification(
@@ -143,19 +144,29 @@ object NotificationHelper {
                 else -> "Tatlı bir mesaj gönderdi ✨"
             }
 
+            val prefs = context.getSharedPreferences("ikimiz_settings", Context.MODE_PRIVATE)
+            val soundEnabled = prefs.getBoolean("notif_sound", true)
+            val vibrationEnabled = prefs.getBoolean("notif_vibration", true)
+            val previewEnabled = prefs.getBoolean("notif_preview", true)
             val defaultSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                .setSmallIcon(com.example.R.drawable.ic_stat_heart)
                 .setContentTitle(displayTitle)
-                .setContentText(displayText)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))
+                .setContentText(if (previewEnabled) displayText else "Yeni bir mesajın var ❤️")
+                .setStyle(
+                    NotificationCompat.BigTextStyle().bigText(
+                        if (previewEnabled) displayText else "Yeni bir mesajın var ❤️"
+                    )
+                )
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setAutoCancel(true)
-                .setSound(defaultSound)
-                .setVibrate(longArrayOf(0, 200, 100, 200))
                 .setContentIntent(pendingIntent)
+                .apply {
+                    if (soundEnabled) setSound(defaultSound)
+                    if (vibrationEnabled) setVibrate(longArrayOf(0, 180, 80, 180))
+                }
                 .build()
 
             val notifId = if (messageId.isNotBlank()) messageId.hashCode() else NOTIFICATION_ID_BASE
